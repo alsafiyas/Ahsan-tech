@@ -66,21 +66,21 @@ export default function SettingsPage() {
                     <span className="text-2xl font-bold text-white">CC</span>
                   </div>
                   <div>
-                    <p className="font-semibold text-foreground">CCTV ERP Pro</p>
-                    <p className="text-sm text-muted-foreground">Security Solutions Company</p>
+                    <p className="font-semibold text-foreground">Kompaniya nomi kiritilmagan</p>
+                    <p className="text-sm text-muted-foreground">Company info to'ldirilishi kerak</p>
                     <button className="btn-secondary text-xs mt-2">Change Logo</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { label: 'Company Name', value: 'CCTV ERP Pro LLC', type: 'text' },
-                    { label: 'Legal Name', value: 'CCTV ERP Pro Mas\'uliyati Cheklangan Jamiyat', type: 'text' },
-                    { label: 'INN (Tax ID)', value: '123456789', type: 'text' },
-                    { label: 'Phone', value: '+998 71 123 4567', type: 'text' },
-                    { label: 'Email', value: 'info@cctverpro.uz', type: 'email' },
-                    { label: 'Website', value: 'www.cctverpro.uz', type: 'text' },
-                    { label: 'Address', value: 'Amir Temur ko\'chasi 45, Tashkent', type: 'text' },
-                    { label: 'City', value: 'Tashkent', type: 'text' },
+                    { label: 'Company Name', value: '', type: 'text' },
+                    { label: 'Legal Name', value: '', type: 'text' },
+                    { label: 'INN (Tax ID)', value: '', type: 'text' },
+                    { label: 'Phone', value: '', type: 'text' },
+                    { label: 'Email', value: '', type: 'email' },
+                    { label: 'Website', value: '', type: 'text' },
+                    { label: 'Address', value: '', type: 'text' },
+                    { label: 'City', value: '', type: 'text' },
                   ].map((f) => (
                     <div key={f.label} className={f.label === 'Legal Name' || f.label === 'Address' ? 'col-span-2' : ''}>
                       <label className="block text-xs text-muted-foreground mb-1">{f.label}</label>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="p-4 rounded-lg" style={{ background: 'var(--secondary)' }}>
                     <p className="font-medium text-foreground text-sm mb-2">Last Backup</p>
-                    <p className="text-xs text-muted-foreground">2026-07-16 02:00:00 — Size: 2.4 GB — Status: ✅ Success</p>
+                    <p className="text-xs text-muted-foreground">Hali zaxira nusxa olinmagan</p>
                     <button className="btn-primary text-xs mt-3 flex items-center gap-1.5">
                       <AppIcon name="CloudArrowUpIcon" size={14} />
                       Backup Now
