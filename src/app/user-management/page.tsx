@@ -18,9 +18,8 @@ import {
   RefreshCw,
   Search
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
-// Tizimdagi bo'limlar ro'yxati (Permissions matrix uchun)
 export const MODULES = [
   { id: "dashboard", label: "Bosh sahifa (Dashboard)", icon: LayoutDashboard },
   { id: "service", label: "Servis markazi (Chiptalar)", icon: Wrench },
@@ -33,7 +32,6 @@ export const MODULES = [
 
 export type ModuleId = typeof MODULES[number]["id"];
 
-// Rol ta'riflari va standart ruxsatlar
 export interface RoleConfig {
   id: string;
   label: string;
@@ -98,6 +96,8 @@ export interface UserProfile {
 }
 
 export default function UserManagementPage() {
+  const supabase = createClient();
+
   const [roles, setRoles] = useState<RoleConfig[]>(INITIAL_ROLES);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -119,18 +119,12 @@ export default function UserManagementPage() {
     status: "active",
   });
 
-  // Supabase'dan foydalanuvchilar va xodimlarni yuklab olish
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Employees (Xodimlar) jadvalidan olish
-      // Eslatma: "email" ustuni employees jadvalida mavjud emas edi,
-      // shuning uchun select'dan olib tashlandi (mavjud bo'lmagan ustunni
-      // so'rash butun so'rovni xato bilan qaytarib, employees ro'yxatini
-      // bo'sh qoldirib yuborardi).
       const { data: empData, error: empError } = await supabase
         .from("employees")
-        .select("id, full_name, position")
+        .select("id, full_name, email, position")
         .eq("is_active", true);
 
       if (empError) {
@@ -138,7 +132,6 @@ export default function UserManagementPage() {
       }
       if (empData) setEmployees(empData);
 
-      // 2. User Profiles / User Roles jadvalidan olish
       const { data: profilesData, error: profilesError } = await supabase
         .from("user_profiles")
         .select("*");
@@ -150,7 +143,6 @@ export default function UserManagementPage() {
       if (profilesData) {
         setUsers(profilesData);
       } else {
-        // Zaxira ko'rinish
         setUsers([
           { id: "1", full_name: "Ali Valiyev", email: "ali@company.uz", role: "admin", status: "active" },
           { id: "2", full_name: "Sardor Rahimov", email: "sardor@company.uz", role: "technician", status: "active" }
@@ -167,7 +159,6 @@ export default function UserManagementPage() {
     fetchData();
   }, []);
 
-  // Xodimlardan birini tanlaganda ism va email avtomatik to'ldiriladi
   const handleSelectEmployee = (empId: string) => {
     setSelectedEmployeeId(empId);
     const emp = employees.find((e) => e.id === empId);
@@ -221,7 +212,6 @@ export default function UserManagementPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-      // Supabase yangilash
       await supabase
         .from("user_profiles")
         .update({
@@ -235,7 +225,6 @@ export default function UserManagementPage() {
 
       setUsers(users.map((u) => (u.id === editingUser.id ? { ...u, ...formData, employee_id: selectedEmployeeId } : u)));
     } else {
-      // Yangi foydalanuvchi qo'shish
       const newUser: UserProfile = {
         id: Date.now().toString(),
         employee_id: selectedEmployeeId || undefined,
@@ -261,7 +250,6 @@ export default function UserManagementPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6 space-y-6">
-      {/* Sarlavha qismi */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-800/80 p-5 rounded-2xl border border-slate-700/60 backdrop-blur-md">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -283,7 +271,6 @@ export default function UserManagementPage() {
         )}
       </div>
 
-      {/* Tablar (Foydalanuvchilar / Rollar va Ruxsatlar) */}
       <div className="flex border-b border-slate-700/60 gap-2">
         <button
           onClick={() => setActiveTab("users")}
@@ -307,10 +294,8 @@ export default function UserManagementPage() {
         </button>
       </div>
 
-      {/* TAB 1: FOYDALANUVCHILAR JADVALI */}
       {activeTab === "users" && (
         <div className="space-y-4">
-          {/* Qidiruv paneli */}
           <div className="relative max-w-xs">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
@@ -388,7 +373,6 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {/* TAB 2: ROLLAR VA BO'LIMLAR RUXSATLARI MATRIXI */}
       {activeTab === "permissions" && (
         <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5 shadow-xl overflow-x-auto">
           <p className="text-sm text-slate-400 mb-4">
@@ -435,7 +419,6 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {/* MODAL OYNA (Xodimlarni biriktirish / Qo'shish) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 border border-slate-700 shadow-2xl text-slate-100">
@@ -449,7 +432,6 @@ export default function UserManagementPage() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
-              {/* Employees oynasidan xodimlarni tanlash dropdown'i */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">
                   Xodimni tanlang (Employees oynasidan)
