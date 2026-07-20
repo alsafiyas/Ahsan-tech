@@ -16,18 +16,7 @@ interface Notification {
   category: string;
 }
 
-const initialNotifications: Notification[] = [
-  { id: 'N001', title: 'Low Stock Alert', message: 'Seagate SkyHawk 4TB is below minimum stock level (3/8 pcs). Please reorder.', type: 'warning', channel: 'system', time: '5 min ago', read: false, category: 'Warehouse' },
-  { id: 'N002', title: 'New Service Ticket', message: 'SRV-2026-005 created for Mirzo Ulugbek. Device: TP-Link TL-SF1008P. Assigned to Sardor Toshmatov.', type: 'info', channel: 'system', time: '12 min ago', read: false, category: 'Service' },
-  { id: 'N003', title: 'Payment Received', message: 'Payment of 18,500,000 UZS received from Nexus LLC for order SO-2026-111.', type: 'success', channel: 'system', time: '1 hour ago', read: false, category: 'Finance' },
-  { id: 'N004', title: 'Installation Completed', message: 'INST-2026-030 completed successfully at Nexus LLC Office. Customer signed off.', type: 'success', channel: 'telegram', time: '2 hours ago', read: true, category: 'Installation' },
-  { id: 'N005', title: 'Employee Absent', message: 'Kamola Ergasheva did not check in today. No leave request on file.', type: 'warning', channel: 'system', time: '3 hours ago', read: true, category: 'HR' },
-  { id: 'N006', title: 'Purchase Order Received', message: 'PO-2026-044 from Dahua Technology UZ fully received. 15 cameras + 5 NVRs added to warehouse.', type: 'success', channel: 'system', time: '5 hours ago', read: true, category: 'Warehouse' },
-  { id: 'N007', title: 'Service Ticket Ready', message: 'SRV-2026-002 is ready for pickup. Customer: Nexus LLC. Total: 520,000 UZS.', type: 'success', channel: 'sms', time: '6 hours ago', read: true, category: 'Service' },
-  { id: 'N008', title: 'Overdue Invoice', message: 'Invoice INV-2026-089 for Samarkand Hotel is 7 days overdue. Amount: 4,500,000 UZS.', type: 'error', channel: 'email', time: '1 day ago', read: true, category: 'Finance' },
-  { id: 'N009', title: 'New Customer Registered', message: 'New customer Tashkent Plaza Hotel added to CRM by Malika Yusupova.', type: 'info', channel: 'system', time: '1 day ago', read: true, category: 'CRM' },
-  { id: 'N010', title: 'Backup Completed', message: 'Automatic database backup completed successfully. Size: 2.4 GB.', type: 'success', channel: 'system', time: '2 days ago', read: true, category: 'System' },
-];
+const initialNotifications: Notification[] = [];
 
 const typeConfig: Record<Notification['type'], { color: string; bg: string; icon: string; borderColor: string }> = {
   info:    { color: 'var(--primary)',  bg: 'rgba(14, 165, 233, 0.12)',  icon: 'InformationCircleIcon',   borderColor: 'rgba(14, 165, 233, 0.3)' },
