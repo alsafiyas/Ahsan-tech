@@ -25,7 +25,7 @@ const paymentMethodOptions: PaymentMethod[] = ['Cash', 'Card', 'Bank Transfer', 
 
 const branchOptions = ['Namangan', 'Samarkand', 'Andijan'];
 
-const managerOptions = ['Sardor Nazarov', 'Malika Tursunova', 'Bobur Rahimov', 'Umida Karimova'];
+const managerOptions: string[] = [];
 
 function generateOrderNumber(): string {
   const num = Math.floor(Math.random() * 900) + 100;
@@ -58,7 +58,7 @@ export default function AddEditOrderModal({ order, onClose, onSave }: AddEditOrd
     branch: order?.branch ?? 'Namangan',
     date: order?.date ?? todayDMY(),
     dueDate: order?.dueDate ?? todayDMY(),
-    manager: order?.manager ?? 'Sardor Nazarov',
+    manager: order?.manager ?? '',
   });
 
   const set = (key: string, value: string | number) => {
