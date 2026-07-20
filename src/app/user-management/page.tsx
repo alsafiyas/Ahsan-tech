@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Users, 
-  UserPlus, 
-  Shield, 
-  Edit2, 
-  Trash2, 
-  X, 
-  Check, 
+import {
+  Users,
+  UserPlus,
+  Shield,
+  Edit2,
+  Trash2,
+  X,
+  Check,
   UserCheck,
   LayoutDashboard,
   Wrench,
@@ -103,11 +103,9 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-
   const [activeTab, setActiveTab] = useState<"users" | "permissions">("users");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
-
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [formData, setFormData] = useState<{
     full_name: string;
@@ -126,17 +124,28 @@ export default function UserManagementPage() {
     setLoading(true);
     try {
       // 1. Employees (Xodimlar) jadvalidan olish
-      const { data: empData } = await supabase
+      // Eslatma: "email" ustuni employees jadvalida mavjud emas edi,
+      // shuning uchun select'dan olib tashlandi (mavjud bo'lmagan ustunni
+      // so'rash butun so'rovni xato bilan qaytarib, employees ro'yxatini
+      // bo'sh qoldirib yuborardi).
+      const { data: empData, error: empError } = await supabase
         .from("employees")
-        .select("id, full_name, email, position")
+        .select("id, full_name, position")
         .eq("is_active", true);
 
+      if (empError) {
+        console.error("Xodimlarni yuklashda xatolik:", empError);
+      }
       if (empData) setEmployees(empData);
 
       // 2. User Profiles / User Roles jadvalidan olish
-      const { data: profilesData } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from("user_profiles")
         .select("*");
+
+      if (profilesError) {
+        console.error("Foydalanuvchilarni yuklashda xatolik:", profilesError);
+      }
 
       if (profilesData) {
         setUsers(profilesData);
@@ -232,7 +241,6 @@ export default function UserManagementPage() {
         employee_id: selectedEmployeeId || undefined,
         ...formData,
       };
-
       await supabase.from("user_profiles").insert([newUser]);
       setUsers([...users, newUser]);
     }
@@ -264,7 +272,6 @@ export default function UserManagementPage() {
             Xodimlarni foydalanuvchi sifatida biriktirish va ularning bo'limlarga kirish huquqlarini sozlash
           </p>
         </div>
-
         {activeTab === "users" && (
           <button
             onClick={() => handleOpenModal()}
