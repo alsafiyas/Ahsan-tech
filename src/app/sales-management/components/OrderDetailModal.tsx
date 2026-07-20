@@ -12,9 +12,7 @@ interface OrderDetailModalProps {
   onRecordPayment: (order: SalesOrder) => void;
 }
 
-const paymentHistory = [
-  { key: 'ph-1', date: '10.07.2026', amount: 6375000, method: 'Cash', ref: 'CASH-0891', recordedBy: 'Malika Tursunova' },
-];
+const paymentHistory: { key: string; date: string; amount: number; method: string; ref: string; recordedBy: string }[] = [];
 
 export default function OrderDetailModal({ order, onClose, onRecordPayment }: OrderDetailModalProps) {
   const paidPct = Math.round((order.paidUZS / order.totalUZS) * 100);
