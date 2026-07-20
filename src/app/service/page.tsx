@@ -65,7 +65,7 @@ interface MapLocation {
   distance_km: number | null;
 }
 
-const TECHNICIANS: string[] = [];
+// Technician list is loaded dynamically from the employees table (see fetchTechnicians below).
 
 const statusConfig: Record<TicketStatus, { label: string; color: string; bg: string }> = {
   pending:   { label: 'Pending',   color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
@@ -99,7 +99,7 @@ const formatDate = (d: string | null) => {
 
 const emptyForm = (): TicketFormData => ({
   customer: '', phone: '', device: '', issue: '', diagnosis: '',
-  technician: TECHNICIANS[0] ?? '', priority: 'normal', cost: '',
+  technician: '', priority: 'normal', cost: '',
   notes: '', estimated_date: '', ticket_status: 'pending',
   location_address: '', location_lat: null, location_lng: null, distance_km: null,
 });
@@ -462,6 +462,7 @@ export default function ServicePage() {
   const supabase = createClient();
 
   const [tickets, setTickets] = useState<ServiceTicket[]>([]);
+  const [technicians, setTechnicians] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -496,8 +497,24 @@ export default function ServicePage() {
     }
   }, []);
 
+  const fetchTechnicians = useCallback(async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from('employees')
+        .select('full_name')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true });
+      if (err) throw err;
+      setTechnicians((data || []).map((e: { full_name: string }) => e.full_name));
+    } catch (e) {
+      // Non-fatal: technician dropdown will just be empty until employees load
+      console.error('Failed to load technicians', e);
+    }
+  }, []);
+
   useEffect(() => {
     fetchTickets();
+    fetchTechnicians();
 
     const channel = supabase
       .channel('service_tickets_realtime')
@@ -609,7 +626,7 @@ export default function ServicePage() {
       device: ticket.device || '',
       issue: ticket.issue || '',
       diagnosis: ticket.diagnosis || '',
-      technician: ticket.technician || TECHNICIANS[0] || '',
+      technician: ticket.technician || technicians[0] || '',
       priority: ticket.priority || 'normal',
       cost: ticket.cost ? String(ticket.cost) : '',
       notes: ticket.notes || '',
@@ -1132,7 +1149,8 @@ export default function ServicePage() {
                 <select value={formData.technician}
                   onChange={(e) => setFormData((p) => ({ ...p, technician: e.target.value }))}
                   className="input w-full text-sm">
-                  {TECHNICIANS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  <option value="">Tanlanmagan</option>
+                  {technicians.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
