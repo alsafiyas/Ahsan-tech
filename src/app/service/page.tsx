@@ -65,7 +65,7 @@ interface MapLocation {
   distance_km: number | null;
 }
 
-const TECHNICIANS = ['Bobur Yusupov', 'Sardor Toshmatov', 'Jasur Mirzayev', 'Otabek Nazarov'];
+const TECHNICIANS: string[] = [];
 
 const statusConfig: Record<TicketStatus, { label: string; color: string; bg: string }> = {
   pending:   { label: 'Pending',   color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
@@ -99,7 +99,7 @@ const formatDate = (d: string | null) => {
 
 const emptyForm = (): TicketFormData => ({
   customer: '', phone: '', device: '', issue: '', diagnosis: '',
-  technician: TECHNICIANS[0], priority: 'normal', cost: '',
+  technician: TECHNICIANS[0] ?? '', priority: 'normal', cost: '',
   notes: '', estimated_date: '', ticket_status: 'pending',
   location_address: '', location_lat: null, location_lng: null, distance_km: null,
 });
@@ -609,7 +609,7 @@ export default function ServicePage() {
       device: ticket.device || '',
       issue: ticket.issue || '',
       diagnosis: ticket.diagnosis || '',
-      technician: ticket.technician || TECHNICIANS[0],
+      technician: ticket.technician || TECHNICIANS[0] || '',
       priority: ticket.priority || 'normal',
       cost: ticket.cost ? String(ticket.cost) : '',
       notes: ticket.notes || '',
