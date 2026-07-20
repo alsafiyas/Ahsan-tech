@@ -41,6 +41,7 @@ interface GeneratedCredentials {
 
 const BRANCHES = ['Namangan', 'Samarkand', 'Bukhara'];
 const DEPARTMENTS = ['IT', 'Sales', 'HR', 'Finance', 'Operations', 'Security', 'Support'];
+const POSITIONS = ['Admin', 'Texnik', 'Sotuv menejeri', 'Montajchi', 'Buxgalter', 'Ombor mudiri', 'Haydovchi', 'Boshqa'];
 const avatarColors = ['var(--primary)', '#8b5cf6', '#06b6d4', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#6366f1'];
 
 const getInitials = (name: string) => name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -80,6 +81,7 @@ export default function EmployeesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(emptyForm());
+  const [positionMode, setPositionMode] = useState<'select' | 'custom'>('select');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -137,6 +139,7 @@ export default function EmployeesPage() {
   const openCreate = () => {
     setEditingEmployee(null);
     setFormData(emptyForm());
+    setPositionMode('select');
     setFormError(null);
     setShowAddModal(true);
   };
@@ -153,6 +156,7 @@ export default function EmployeesPage() {
       email: emp.email || '',
       is_active: emp.is_active,
     });
+    setPositionMode(emp.position && !POSITIONS.includes(emp.position) ? 'custom' : 'select');
     setFormError(null);
     setShowAddModal(true);
     setSelectedEmployee(null);
@@ -655,13 +659,32 @@ export default function EmployeesPage() {
               {/* Position */}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Lavozim</label>
-                <input
-                  type="text"
-                  placeholder="Masalan: Dasturchi"
-                  value={formData.position}
-                  onChange={(e) => setFormData((p) => ({ ...p, position: e.target.value }))}
+                <select
+                  value={positionMode === 'custom' ? 'Boshqa' : formData.position}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'Boshqa') {
+                      setPositionMode('custom');
+                      setFormData((p) => ({ ...p, position: '' }));
+                    } else {
+                      setPositionMode('select');
+                      setFormData((p) => ({ ...p, position: val }));
+                    }
+                  }}
                   className="input w-full text-sm"
-                />
+                >
+                  <option value="">Tanlang</option>
+                  {POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+                </select>
+                {positionMode === 'custom' && (
+                  <input
+                    type="text"
+                    placeholder="Lavozimni kiriting"
+                    value={formData.position}
+                    onChange={(e) => setFormData((p) => ({ ...p, position: e.target.value }))}
+                    className="input w-full text-sm mt-2"
+                  />
+                )}
               </div>
 
               {/* Department */}
