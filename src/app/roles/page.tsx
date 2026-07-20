@@ -36,65 +36,14 @@ const moduleKeys = [
   'Reports', 'Branches', 'Audit Log', 'Settings'
 ];
 
-const mockRoles: Role[] = [
-  {
-    id: 'R001', name: 'Admin', emoji: '👑', description: 'Tizimga to\'liq kirish — barcha modullar va amallar', userCount: 1,
-    permissions: Object.fromEntries(modules.map((m) => [m, { view: true, create: true, edit: true, delete: true, export: true }])),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R002', name: 'Direktor', emoji: '👔', description: 'Barcha hisobotlarni ko\'rish va asosiy tranzaksiyalarni tasdiqlash', userCount: 1,
-    permissions: Object.fromEntries(modules.map((m) => [m, { view: true, create: false, edit: false, delete: false, export: true }])),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R003', name: 'Hisobchi', emoji: '💰', description: 'Moliya, maosh va hisobotlarga kirish', userCount: 1,
-    permissions: Object.fromEntries(modules.map((m, i) => {
-      const k = moduleKeys[i];
-      return [m, { view: ['Finance', 'Payroll', 'Reports', 'Dashboard'].includes(k), create: ['Finance', 'Payroll'].includes(k), edit: ['Finance', 'Payroll'].includes(k), delete: false, export: ['Finance', 'Payroll', 'Reports'].includes(k) }];
-    })),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R004', name: 'Savdo menejeri', emoji: '🛒', description: 'CRM, savdo buyurtmalari va mijozlarni boshqarish', userCount: 2,
-    permissions: Object.fromEntries(modules.map((m, i) => {
-      const k = moduleKeys[i];
-      return [m, { view: ['CRM', 'Sales', 'Products', 'Dashboard', 'Reports'].includes(k), create: ['CRM', 'Sales'].includes(k), edit: ['CRM', 'Sales'].includes(k), delete: false, export: ['Sales', 'Reports'].includes(k) }];
-    })),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R005', name: 'Ombor menejeri', emoji: '📦', description: 'Ombor, mahsulotlar va xaridlarga kirish', userCount: 1,
-    permissions: Object.fromEntries(modules.map((m, i) => {
-      const k = moduleKeys[i];
-      return [m, { view: ['Warehouse', 'Products', 'Purchasing', 'Dashboard'].includes(k), create: ['Warehouse', 'Purchasing'].includes(k), edit: ['Warehouse', 'Products'].includes(k), delete: false, export: ['Warehouse'].includes(k) }];
-    })),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R006', name: 'Texnik', emoji: '🔧', description: 'Servis ticketlari va montaj vazifalari', userCount: 3,
-    permissions: Object.fromEntries(modules.map((m, i) => {
-      const k = moduleKeys[i];
-      return [m, { view: ['Service', 'Installation', 'Products', 'Dashboard'].includes(k), create: ['Service'].includes(k), edit: ['Service', 'Installation'].includes(k), delete: false, export: false }];
-    })),
-    assignedEmployeeIds: [],
-  },
-  {
-    id: 'R007', name: 'HR menejeri', emoji: '👨‍💼', description: 'Xodimlarni boshqarish, davomat va maosh', userCount: 1,
-    permissions: Object.fromEntries(modules.map((m, i) => {
-      const k = moduleKeys[i];
-      return [m, { view: ['Employees', 'Attendance', 'Payroll', 'Dashboard'].includes(k), create: ['Employees'].includes(k), edit: ['Employees', 'Attendance', 'Payroll'].includes(k), delete: false, export: ['Payroll', 'Attendance'].includes(k) }];
-    })),
-    assignedEmployeeIds: [],
-  },
-];
+const mockRoles: Role[] = [];
 
 export default function RolesPage() {
   const { t } = useLanguage();
   const supabase = createClient();
 
   const [roles, setRoles] = useState<Role[]>(mockRoles);
-  const [selectedRole, setSelectedRole] = useState<Role>(mockRoles[0]);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(mockRoles[0] ?? null);
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
 
@@ -142,6 +91,7 @@ export default function RolesPage() {
   };
 
   const openAssignModal = () => {
+    if (!selectedRole) return;
     setAssignEmployeeIds(selectedRole.assignedEmployeeIds || []);
     setAssignSearch('');
     setShowAssignModal(true);
@@ -173,6 +123,7 @@ export default function RolesPage() {
   };
 
   const handleSaveAssign = () => {
+    if (!selectedRole) return;
     const updated = roles.map((r) =>
       r.id === selectedRole.id
         ? { ...r, assignedEmployeeIds: assignEmployeeIds, userCount: assignEmployeeIds.length }
@@ -183,7 +134,7 @@ export default function RolesPage() {
     setShowAssignModal(false);
   };
 
-  const assignedEmployees = employees.filter((e) => (selectedRole.assignedEmployeeIds || []).includes(e.id));
+  const assignedEmployees = employees.filter((e) => (selectedRole?.assignedEmployeeIds || []).includes(e.id));
 
   const filteredForAssign = employees.filter((e) =>
     e.full_name.toLowerCase().includes(assignSearch.toLowerCase()) ||
@@ -210,6 +161,17 @@ export default function RolesPage() {
           </button>
         </div>
 
+        {roles.length === 0 ? (
+          <div className="card flex flex-col items-center justify-center py-16 text-center">
+            <AppIcon name="ShieldCheckIcon" size={40} className="text-muted-foreground mb-3 opacity-40" />
+            <p className="font-medium text-foreground mb-1">Hali rol yaratilmagan</p>
+            <p className="text-sm text-muted-foreground mb-4">Boshlash uchun birinchi rolni yarating</p>
+            <button onClick={openAddRole} className="btn-primary flex items-center gap-2 text-sm">
+              <AppIcon name="PlusIcon" size={16} />
+              {t.roles_add}
+            </button>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Role List */}
           <div className="space-y-2">
@@ -217,7 +179,7 @@ export default function RolesPage() {
               <button
                 key={role.id}
                 onClick={() => setSelectedRole(role)}
-                className={`w-full card p-4 text-left transition-all ${selectedRole.id === role.id ? 'border-primary/50 bg-primary/5' : 'hover:border-primary/20'}`}
+                className={`w-full card p-4 text-left transition-all ${selectedRole?.id === role.id ? 'border-primary/50 bg-primary/5' : 'hover:border-primary/20'}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xl">{role.emoji}</span>
@@ -225,13 +187,14 @@ export default function RolesPage() {
                     <p className="font-semibold text-foreground text-sm">{role.name}</p>
                     <p className="text-xs text-muted-foreground">{role.userCount} foydalanuvchi</p>
                   </div>
-                  {selectedRole.id === role.id && <AppIcon name="ChevronRightIcon" size={14} style={{ color: 'var(--primary)' }} />}
+                  {selectedRole?.id === role.id && <AppIcon name="ChevronRightIcon" size={14} style={{ color: 'var(--primary)' }} />}
                 </div>
               </button>
             ))}
           </div>
 
           {/* Right panel */}
+          {selectedRole && (
           <div className="lg:col-span-3 space-y-4">
             {/* Assigned Employees Card */}
             <div className="card overflow-hidden">
@@ -336,7 +299,9 @@ export default function RolesPage() {
               </div>
             </div>
           </div>
+          )}
         </div>
+        )}
       </div>
 
       {/* Add Role Modal */}
@@ -462,7 +427,7 @@ export default function RolesPage() {
       )}
 
       {/* Assign Employees Modal */}
-      {showAssignModal && (
+      {showAssignModal && selectedRole && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowAssignModal(false)}>
           <div className="card w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
