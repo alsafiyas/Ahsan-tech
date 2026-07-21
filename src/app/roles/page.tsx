@@ -6,14 +6,14 @@ import AppIcon from '@/components/ui/AppIcon';
 import { useLanguage } from '@/context/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
 
+type PermSet = { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean };
+
 interface Role {
   id: string;
   name: string;
   emoji: string;
   description: string;
-  userCount: number;
-  permissions: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; export: boolean }>;
-  assignedEmployeeIds?: string[];
+  permissions: Record<string, PermSet>;
 }
 
 interface Employee {
@@ -22,6 +22,7 @@ interface Employee {
   position: string;
   department: string;
   is_active: boolean;
+  role_id?: string | null;
 }
 
 const modules = [
@@ -30,91 +31,97 @@ const modules = [
   'Hisobotlar', 'Filiallar', 'Audit jurnali', 'Sozlamalar'
 ];
 
-const moduleKeys = [
-  'Dashboard', 'CRM', 'Sales', 'Products', 'Warehouse', 'Purchasing',
-  'Service', 'Installation', 'Employees', 'Attendance', 'Payroll', 'Finance',
-  'Reports', 'Branches', 'Audit Log', 'Settings'
-];
-
-const mockRoles: Role[] = [];
+const emptyPermissions = (): Record<string, PermSet> =>
+  Object.fromEntries(modules.map((m) => [m, { view: false, create: false, edit: false, delete: false, export: false }]));
 
 export default function RolesPage() {
   const { t } = useLanguage();
   const supabase = createClient();
 
-  const [roles, setRoles] = useState<Role[]>(mockRoles);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
+  const [rolesError, setRolesError] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [savingPerms, setSavingPerms] = useState(false);
 
-  // Employees state
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const [empSearch, setEmpSearch] = useState('');
 
-  // Add role form
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleEmoji, setNewRoleEmoji] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [newRoleCopyFrom, setNewRoleCopyFrom] = useState('');
   const [newRoleEmployeeIds, setNewRoleEmployeeIds] = useState<string[]>([]);
   const [addEmpSearch, setAddEmpSearch] = useState('');
+  const [creatingRole, setCreatingRole] = useState(false);
+  const [addRoleError, setAddRoleError] = useState<string | null>(null);
 
-  // Assign employees modal state (for existing role)
   const [assignEmployeeIds, setAssignEmployeeIds] = useState<string[]>([]);
   const [assignSearch, setAssignSearch] = useState('');
+  const [savingAssign, setSavingAssign] = useState(false);
+
+  const [draftPermissions, setDraftPermissions] = useState<Record<string, PermSet>>({});
+  const [permDirty, setPermDirty] = useState(false);
+  const [savingPerms, setSavingPerms] = useState(false);
+
+  const fetchRoles = useCallback(async () => {
+    setRolesLoading(true);
+    setRolesError(null);
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id, name, emoji, description, permissions')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      const loaded = (data || []) as Role[];
+      setRoles(loaded);
+      setSelectedRole((prev) => {
+        if (prev) {
+          const stillExists = loaded.find((r) => r.id === prev.id);
+          if (stillExists) return stillExists;
+        }
+        return loaded[0] ?? null;
+      });
+    } catch (err: any) {
+      setRolesError(err?.message || 'Rollarni yuklashda xatolik yuz berdi');
+    } finally {
+      setRolesLoading(false);
+    }
+  }, [supabase]);
 
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, full_name, position, department, is_active')
+        .select('id, full_name, position, department, is_active, role_id')
         .order('full_name', { ascending: true });
       if (!error && data) setEmployees(data as Employee[]);
     } catch (_) {}
     setEmpLoading(false);
   }, [supabase]);
 
-  const fetchRoles = useCallback(async () => {
-    setRolesLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('custom_roles')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (!error && data) {
-        const mapped: Role[] = data.map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          emoji: r.emoji || '🔑',
-          description: r.description || '',
-          userCount: r.user_count || 0,
-          permissions: r.permissions || {},
-          assignedEmployeeIds: r.assigned_employee_ids || [],
-        }));
-        setRoles(mapped);
-        setSelectedRole((prev) => {
-          if (prev) {
-            const stillExists = mapped.find((m) => m.id === prev.id);
-            if (stillExists) return stillExists;
-          }
-          return mapped[0] ?? null;
-        });
-      }
-    } catch (_) {}
-    setRolesLoading(false);
-  }, [supabase]);
-
   useEffect(() => {
     fetchRoles();
-  }, [fetchRoles]);
+    fetchEmployees();
+  }, [fetchRoles, fetchEmployees]);
 
   useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
+    if (selectedRole) {
+      setDraftPermissions(selectedRole.permissions || emptyPermissions());
+      setPermDirty(false);
+    } else {
+      setDraftPermissions({});
+      setPermDirty(false);
+    }
+  }, [selectedRole?.id]);
+
+  const getAssignedEmployees = useCallback(
+    (roleId: string) => employees.filter((e) => e.role_id === roleId),
+    [employees]
+  );
 
   const openAddRole = () => {
     setNewRoleName('');
@@ -123,12 +130,13 @@ export default function RolesPage() {
     setNewRoleCopyFrom('');
     setNewRoleEmployeeIds([]);
     setAddEmpSearch('');
+    setAddRoleError(null);
     setShowAddRole(true);
   };
 
   const openAssignModal = () => {
     if (!selectedRole) return;
-    setAssignEmployeeIds(selectedRole.assignedEmployeeIds || []);
+    setAssignEmployeeIds(getAssignedEmployees(selectedRole.id).map((e) => e.id));
     setAssignSearch('');
     setShowAssignModal(true);
   };
@@ -137,40 +145,42 @@ export default function RolesPage() {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
 
-  const [creatingRole, setCreatingRole] = useState(false);
-
   const handleCreateRole = async () => {
-    if (!newRoleName.trim() || creatingRole) return;
+    if (!newRoleName.trim()) return;
     setCreatingRole(true);
-    const copySource = roles.find((r) => r.name === newRoleCopyFrom);
-    const perms = copySource
-      ? { ...copySource.permissions }
-      : Object.fromEntries(modules.map((m) => [m, { view: false, create: false, edit: false, delete: false, export: false }]));
-    const newRole: Role = {
-      id: `R${Date.now()}`,
-      name: newRoleName.trim(),
-      emoji: newRoleEmoji.trim() || '🔑',
-      description: newRoleDesc.trim() || '',
-      userCount: newRoleEmployeeIds.length,
-      permissions: perms,
-      assignedEmployeeIds: newRoleEmployeeIds,
-    };
+    setAddRoleError(null);
     try {
-      const { error } = await supabase.from('custom_roles').insert({
-        id: newRole.id,
-        name: newRole.name,
-        emoji: newRole.emoji,
-        description: newRole.description,
-        permissions: newRole.permissions,
-        assigned_employee_ids: newRole.assignedEmployeeIds,
-        user_count: newRole.userCount,
-      });
+      const copySource = roles.find((r) => r.name === newRoleCopyFrom);
+      const perms = copySource ? { ...copySource.permissions } : emptyPermissions();
+
+      const { data, error } = await supabase
+        .from('roles')
+        .insert({
+          name: newRoleName.trim(),
+          emoji: newRoleEmoji.trim() || '🔑',
+          description: newRoleDesc.trim() || '',
+          permissions: perms,
+        })
+        .select('id, name, emoji, description, permissions')
+        .single();
+
       if (error) throw error;
+
+      if (newRoleEmployeeIds.length > 0) {
+        const { error: assignError } = await supabase
+          .from('employees')
+          .update({ role_id: data.id })
+          .in('id', newRoleEmployeeIds);
+        if (assignError) throw assignError;
+        await fetchEmployees();
+      }
+
+      const newRole = data as Role;
       setRoles((prev) => [...prev, newRole]);
       setSelectedRole(newRole);
       setShowAddRole(false);
-    } catch (e) {
-      alert("Rol saqlashda xato yuz berdi. Supabase'da 'custom_roles' jadvali yaratilganini tekshiring.");
+    } catch (err: any) {
+      setAddRoleError(err?.message || 'Rol yaratishda xatolik yuz berdi');
     } finally {
       setCreatingRole(false);
     }
@@ -178,22 +188,62 @@ export default function RolesPage() {
 
   const handleSaveAssign = async () => {
     if (!selectedRole) return;
-    const updatedRole = { ...selectedRole, assignedEmployeeIds: assignEmployeeIds, userCount: assignEmployeeIds.length };
+    setSavingAssign(true);
     try {
-      const { error } = await supabase
-        .from('custom_roles')
-        .update({ assigned_employee_ids: assignEmployeeIds, user_count: assignEmployeeIds.length })
-        .eq('id', selectedRole.id);
-      if (error) throw error;
-      setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? updatedRole : r)));
-      setSelectedRole(updatedRole);
+      const currentAssigned = getAssignedEmployees(selectedRole.id).map((e) => e.id);
+      const toAdd = assignEmployeeIds.filter((id) => !currentAssigned.includes(id));
+      const toRemove = currentAssigned.filter((id) => !assignEmployeeIds.includes(id));
+
+      if (toAdd.length > 0) {
+        const { error } = await supabase.from('employees').update({ role_id: selectedRole.id }).in('id', toAdd);
+        if (error) throw error;
+      }
+      if (toRemove.length > 0) {
+        const { error } = await supabase.from('employees').update({ role_id: null }).in('id', toRemove);
+        if (error) throw error;
+      }
+      await fetchEmployees();
       setShowAssignModal(false);
-    } catch (e) {
-      alert('Xodimlarni biriktirishda xato yuz berdi.');
+    } catch (err) {
+      console.error('Failed to save employee assignment', err);
+    } finally {
+      setSavingAssign(false);
     }
   };
 
-  const assignedEmployees = employees.filter((e) => (selectedRole?.assignedEmployeeIds || []).includes(e.id));
+  const togglePerm = (mod: string, perm: keyof PermSet) => {
+    setDraftPermissions((prev) => ({
+      ...prev,
+      [mod]: { ...(prev[mod] || { view: false, create: false, edit: false, delete: false, export: false }), [perm]: !prev[mod]?.[perm] },
+    }));
+    setPermDirty(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!selectedRole) return;
+    setSavingPerms(true);
+    try {
+      const { error } = await supabase
+        .from('roles')
+        .update({ permissions: draftPermissions })
+        .eq('id', selectedRole.id);
+      if (error) throw error;
+      setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? { ...r, permissions: draftPermissions } : r)));
+      setSelectedRole((prev) => (prev ? { ...prev, permissions: draftPermissions } : prev));
+      setPermDirty(false);
+    } catch (err) {
+      console.error('Failed to save permissions', err);
+    } finally {
+      setSavingPerms(false);
+    }
+  };
+
+  const handleResetPermissions = () => {
+    if (selectedRole) setDraftPermissions(selectedRole.permissions || emptyPermissions());
+    setPermDirty(false);
+  };
+
+  const assignedEmployees = selectedRole ? getAssignedEmployees(selectedRole.id) : [];
 
   const filteredForAssign = employees.filter((e) =>
     e.full_name.toLowerCase().includes(assignSearch.toLowerCase()) ||
@@ -208,7 +258,6 @@ export default function RolesPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t.roles_title}</h1>
@@ -220,9 +269,17 @@ export default function RolesPage() {
           </button>
         </div>
 
+        {rolesError && (
+          <div className="flex items-center gap-3 p-4 rounded-lg text-sm" style={{ background: 'var(--danger)15', color: 'var(--danger)', border: '1px solid var(--danger)30' }}>
+            <AppIcon name="ExclamationCircleIcon" size={16} />
+            {rolesError}
+          </div>
+        )}
+
         {rolesLoading ? (
-          <div className="card flex items-center justify-center py-16">
-            <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
+          <div className="card flex items-center justify-center py-16 gap-3 text-muted-foreground">
+            <AppIcon name="ArrowPathIcon" size={20} className="animate-spin" />
+            <span className="text-sm">Yuklanmoqda...</span>
           </div>
         ) : roles.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-16 text-center">
@@ -236,7 +293,6 @@ export default function RolesPage() {
           </div>
         ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Role List */}
           <div className="space-y-2">
             {roles.map((role) => (
               <button
@@ -248,7 +304,7 @@ export default function RolesPage() {
                   <span className="text-xl">{role.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-foreground text-sm">{role.name}</p>
-                    <p className="text-xs text-muted-foreground">{role.userCount} foydalanuvchi</p>
+                    <p className="text-xs text-muted-foreground">{getAssignedEmployees(role.id).length} foydalanuvchi</p>
                   </div>
                   {selectedRole?.id === role.id && <AppIcon name="ChevronRightIcon" size={14} style={{ color: 'var(--primary)' }} />}
                 </div>
@@ -256,10 +312,8 @@ export default function RolesPage() {
             ))}
           </div>
 
-          {/* Right panel */}
           {selectedRole && (
           <div className="lg:col-span-3 space-y-4">
-            {/* Assigned Employees Card */}
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex items-center gap-3">
@@ -312,10 +366,12 @@ export default function RolesPage() {
               </div>
             </div>
 
-            {/* Permissions Matrix */}
             <div className="card overflow-hidden">
-              <div className="px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ruxsatlar matritsasi</p>
+                {permDirty && (
+                  <span className="text-xs font-medium" style={{ color: 'var(--warning)' }}>Saqlanmagan o'zgarishlar bor</span>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -329,38 +385,27 @@ export default function RolesPage() {
                   </thead>
                   <tbody>
                     {modules.map((mod) => {
-                      const perms = selectedRole.permissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
+                      const perms = draftPermissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
                       return (
                         <tr key={mod} className="border-b hover:bg-secondary/20 transition-colors" style={{ borderColor: 'var(--border)' }}>
                           <td className="px-4 py-3 text-xs font-medium text-foreground">{mod}</td>
-                          {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => (
-                            <td key={perm} className="px-4 py-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedRole((prev) => {
-                                    if (!prev) return prev;
-                                    const nextPerms = {
-                                      ...prev.permissions,
-                                      [mod]: { ...(prev.permissions[mod] || perms), [perm]: !perms[perm] },
-                                    };
-                                    return { ...prev, permissions: nextPerms };
-                                  });
-                                }}
-                                className="inline-flex justify-center"
-                              >
-                                {perms[perm] ? (
-                                  <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'rgba(34, 197, 94, 0.15)' }}>
-                                    <AppIcon name="CheckIcon" size={12} style={{ color: 'var(--success)' }} />
+                          {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => {
+                            const active = perms[perm];
+                            return (
+                              <td key={perm} className="px-4 py-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => togglePerm(mod, perm)}
+                                  className="inline-flex mx-auto"
+                                  title={active ? "O'chirish uchun bosing" : 'Yoqish uchun bosing'}
+                                >
+                                  <div className="w-5 h-5 rounded flex items-center justify-center transition-colors" style={{ background: active ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.1)' }}>
+                                    <AppIcon name={active ? 'CheckIcon' : 'XMarkIcon'} size={12} style={{ color: active ? 'var(--success)' : 'var(--danger)' }} />
                                   </div>
-                                ) : (
-                                  <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
-                                    <AppIcon name="XMarkIcon" size={12} style={{ color: 'var(--danger)' }} />
-                                  </div>
-                                )}
-                              </button>
-                            </td>
-                          ))}
+                                </button>
+                              </td>
+                            );
+                          })}
                         </tr>
                       );
                     })}
@@ -368,28 +413,20 @@ export default function RolesPage() {
                 </table>
               </div>
               <div className="px-5 py-3 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--border)' }}>
-                <button onClick={fetchRoles} className="btn-secondary text-sm">Standartga qaytarish</button>
                 <button
-                  disabled={savingPerms}
-                  onClick={async () => {
-                    if (!selectedRole) return;
-                    setSavingPerms(true);
-                    try {
-                      const { error } = await supabase
-                        .from('custom_roles')
-                        .update({ permissions: selectedRole.permissions })
-                        .eq('id', selectedRole.id);
-                      if (error) throw error;
-                      setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? selectedRole : r)));
-                    } catch (e) {
-                      alert('Ruxsatlarni saqlashda xato yuz berdi.');
-                    } finally {
-                      setSavingPerms(false);
-                    }
-                  }}
-                  className="btn-primary text-sm disabled:opacity-50"
+                  onClick={handleResetPermissions}
+                  disabled={!permDirty}
+                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {savingPerms ? 'Saqlanmoqda...' : 'Ruxsatlarni saqlash'}
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={handleSavePermissions}
+                  disabled={!permDirty || savingPerms}
+                  className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingPerms && <AppIcon name="ArrowPathIcon" size={14} className="animate-spin" />}
+                  Ruxsatlarni saqlash
                 </button>
               </div>
             </div>
@@ -399,7 +436,6 @@ export default function RolesPage() {
         )}
       </div>
 
-      {/* Add Role Modal */}
       {showAddRole && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowAddRole(false)}>
           <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -409,12 +445,19 @@ export default function RolesPage() {
                 <AppIcon name="XMarkIcon" size={18} />
               </button>
             </div>
+
+            {addRoleError && (
+              <div className="p-3 rounded-lg text-xs" style={{ background: 'var(--danger)15', color: 'var(--danger)' }}>
+                {addRoleError}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Rol nomi</label>
                 <input
                   type="text"
-                  placeholder="Masalan: Operator"
+                  placeholder="Masalan: Texnik"
                   className="input w-full text-sm"
                   value={newRoleName}
                   onChange={(e) => setNewRoleName(e.target.value)}
@@ -424,7 +467,7 @@ export default function RolesPage() {
                 <label className="block text-xs text-muted-foreground mb-1">Emoji</label>
                 <input
                   type="text"
-                  placeholder="📞"
+                  placeholder="🔧"
                   className="input w-full text-sm"
                   value={newRoleEmoji}
                   onChange={(e) => setNewRoleEmoji(e.target.value)}
@@ -432,10 +475,10 @@ export default function RolesPage() {
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Tavsif</label>
-                <textarea
-                  rows={2}
-                  className="input w-full text-sm resize-none"
-                  placeholder="Rol tavsifi..."
+                <input
+                  type="text"
+                  placeholder="Rol haqida qisqacha"
+                  className="input w-full text-sm"
                   value={newRoleDesc}
                   onChange={(e) => setNewRoleDesc(e.target.value)}
                 />
@@ -452,7 +495,6 @@ export default function RolesPage() {
                 </select>
               </div>
 
-              {/* Employee selection */}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">
                   Xodimlarni tanlash
@@ -515,13 +557,19 @@ export default function RolesPage() {
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowAddRole(false)} className="btn-secondary flex-1 text-sm">Bekor qilish</button>
-              <button onClick={handleCreateRole} className="btn-primary flex-1 text-sm">Rol yaratish</button>
+              <button
+                onClick={handleCreateRole}
+                disabled={creatingRole || !newRoleName.trim()}
+                className="btn-primary flex-1 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {creatingRole && <AppIcon name="ArrowPathIcon" size={14} className="animate-spin" />}
+                Rol yaratish
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Assign Employees Modal */}
       {showAssignModal && selectedRole && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowAssignModal(false)}>
           <div className="card w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -537,7 +585,6 @@ export default function RolesPage() {
               </button>
             </div>
 
-            {/* Search */}
             <div className="relative">
               <AppIcon name="MagnifyingGlassIcon" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -549,7 +596,6 @@ export default function RolesPage() {
               />
             </div>
 
-            {/* Selected count */}
             {assignEmployeeIds.length > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">{assignEmployeeIds.length} xodim tanlandi</span>
@@ -563,7 +609,6 @@ export default function RolesPage() {
               </div>
             )}
 
-            {/* Employee list */}
             <div className="border rounded-lg overflow-hidden max-h-72 overflow-y-auto" style={{ borderColor: 'var(--border)' }}>
               {empLoading ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Yuklanmoqda...</p>
@@ -611,7 +656,12 @@ export default function RolesPage() {
 
             <div className="flex gap-3 pt-1">
               <button onClick={() => setShowAssignModal(false)} className="btn-secondary flex-1 text-sm">Bekor qilish</button>
-              <button onClick={handleSaveAssign} className="btn-primary flex-1 text-sm">
+              <button
+                onClick={handleSaveAssign}
+                disabled={savingAssign}
+                className="btn-primary flex-1 text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {savingAssign && <AppIcon name="ArrowPathIcon" size={14} className="animate-spin" />}
                 Saqlash ({assignEmployeeIds.length})
               </button>
             </div>
