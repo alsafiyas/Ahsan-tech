@@ -107,16 +107,24 @@ export default function UserManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [roleFormData, setRoleFormData] = useState({ id: "", label: "", description: "" });
+  const [roleSaveError, setRoleSaveError] = useState<string | null>(null);
+  const [savingRole, setSavingRole] = useState(false);
   const [formData, setFormData] = useState<{
     full_name: string;
     email: string;
     role: string;
     status: "active" | "inactive";
+    password: string;
   }>({
     full_name: "",
     email: "",
     role: "operator",
     status: "active",
+    password: "",
   });
 
   const fetchData = async () => {
@@ -134,19 +142,31 @@ export default function UserManagementPage() {
 
       const { data: profilesData, error: profilesError } = await supabase
         .from("user_profiles")
-        .select("*");
+        .select("id, employee_id, full_name, email, role, is_active, created_at");
 
       if (profilesError) {
         console.error("Foydalanuvchilarni yuklashda xatolik:", profilesError);
       }
 
-      if (profilesData) {
-        setUsers(profilesData);
-      } else {
-        setUsers([
-          { id: "1", full_name: "Ali Valiyev", email: "ali@company.uz", role: "admin", status: "active" },
-          { id: "2", full_name: "Sardor Rahimov", email: "sardor@company.uz", role: "technician", status: "active" }
-        ]);
+      setUsers(
+        (profilesData || []).map((p: any) => ({
+          id: p.id,
+          employee_id: p.employee_id || undefined,
+          full_name: p.full_name,
+          email: p.email,
+          role: p.role,
+          status: p.is_active ? "active" : "inactive",
+          created_at: p.created_at,
+        }))
+      );
+
+      const { data: roleData, error: roleError } = await supabase
+        .from("role_permissions")
+        .select("id, label, description, permissions")
+        .order("label", { ascending: true });
+
+      if (!roleError && roleData && roleData.length > 0) {
+        setRoles(roleData as RoleConfig[]);
       }
     } catch (err) {
       console.error("Ma'lumotlarni yuklashda xatolik:", err);
@@ -171,22 +191,92 @@ export default function UserManagementPage() {
     }
   };
 
-  const togglePermission = (roleId: string, moduleId: ModuleId) => {
+  const openAddRole = () => {
+    setRoleFormData({ id: "", label: "", description: "" });
+    setRoleSaveError(null);
+    setIsRoleModalOpen(true);
+  };
+
+  const slugify = (text: string) =>
+    text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "_") || `role_${Date.now()}`;
+
+  const handleCreateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRoleSaveError(null);
+    if (!roleFormData.label.trim()) {
+      setRoleSaveError("Rol nomi kiritilishi shart.");
+      return;
+    }
+    const newId = slugify(roleFormData.label);
+    if (roles.some((r) => r.id === newId)) {
+      setRoleSaveError("Bu nomdagi rol allaqachon mavjud.");
+      return;
+    }
+    setSavingRole(true);
+    try {
+      const { error } = await supabase.from("role_permissions").insert({
+        id: newId,
+        label: roleFormData.label.trim(),
+        description: roleFormData.description.trim(),
+        permissions: [],
+      });
+      if (error) throw error;
+      setRoles((prev) => [
+        ...prev,
+        { id: newId, label: roleFormData.label.trim(), description: roleFormData.description.trim(), permissions: [] },
+      ]);
+      setIsRoleModalOpen(false);
+    } catch (err: any) {
+      setRoleSaveError(err?.message || "Rol yaratishda xato yuz berdi.");
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  const handleDeleteRole = async (roleId: string) => {
+    if (!confirm("Ushbu rolni o'chirishga ishonchingiz komilmi? Bu rolga biriktirilgan foydalanuvchilarning roli bekor bo'lmaydi, lekin ular boshqa rolga qayta tayinlanishi kerak bo'ladi.")) return;
+    const { error } = await supabase.from("role_permissions").delete().eq("id", roleId);
+    if (error) {
+      alert("O'chirishda xato yuz berdi: " + error.message);
+      return;
+    }
+    setRoles((prev) => prev.filter((r) => r.id !== roleId));
+  };
+
+  const togglePermission = async (roleId: string, moduleId: ModuleId) => {
+    const role = roles.find((r) => r.id === roleId);
+    if (!role) return;
+    const hasPermission = role.permissions.includes(moduleId);
+    const newPermissions = hasPermission
+      ? role.permissions.filter((p) => p !== moduleId)
+      : [...role.permissions, moduleId];
+
+    // Optimistic update
     setRoles((prevRoles) =>
-      prevRoles.map((role) => {
-        if (role.id === roleId) {
-          const hasPermission = role.permissions.includes(moduleId);
-          const newPermissions = hasPermission
-            ? role.permissions.filter((p) => p !== moduleId)
-            : [...role.permissions, moduleId];
-          return { ...role, permissions: newPermissions };
-        }
-        return role;
-      })
+      prevRoles.map((r) => (r.id === roleId ? { ...r, permissions: newPermissions } : r))
     );
+
+    const { error } = await supabase
+      .from("role_permissions")
+      .update({ permissions: newPermissions, updated_at: new Date().toISOString() })
+      .eq("id", roleId);
+
+    if (error) {
+      console.error("Ruxsatni saqlashda xatolik:", error);
+      // Revert on failure
+      setRoles((prevRoles) =>
+        prevRoles.map((r) => (r.id === roleId ? { ...r, permissions: role.permissions } : r))
+      );
+      alert("Ruxsatni saqlashda xato yuz berdi.");
+    }
   };
 
   const handleOpenModal = (user?: UserProfile) => {
+    setSaveError(null);
     if (user) {
       setEditingUser(user);
       setSelectedEmployeeId(user.employee_id || "");
@@ -195,6 +285,7 @@ export default function UserManagementPage() {
         email: user.email,
         role: user.role,
         status: user.status,
+        password: "",
       });
     } else {
       setEditingUser(null);
@@ -204,6 +295,7 @@ export default function UserManagementPage() {
         email: "",
         role: "operator",
         status: "active",
+        password: "",
       });
     }
     setIsModalOpen(true);
@@ -211,34 +303,84 @@ export default function UserManagementPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUser) {
-      await supabase
-        .from("user_profiles")
-        .update({
-          full_name: formData.full_name,
-          email: formData.email,
-          role: formData.role,
-          status: formData.status,
-          employee_id: selectedEmployeeId || null,
-        })
-        .eq("id", editingUser.id);
+    setSaveError(null);
+    setSaving(true);
+    try {
+      if (editingUser) {
+        const { error } = await supabase
+          .from("user_profiles")
+          .update({
+            full_name: formData.full_name,
+            role: formData.role,
+            is_active: formData.status === "active",
+            employee_id: selectedEmployeeId || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingUser.id);
 
-      setUsers(users.map((u) => (u.id === editingUser.id ? { ...u, ...formData, employee_id: selectedEmployeeId } : u)));
-    } else {
-      const newUser: UserProfile = {
-        id: Date.now().toString(),
-        employee_id: selectedEmployeeId || undefined,
-        ...formData,
-      };
-      await supabase.from("user_profiles").insert([newUser]);
-      setUsers([...users, newUser]);
+        if (error) throw error;
+
+        setUsers(
+          users.map((u) =>
+            u.id === editingUser.id
+              ? { ...u, full_name: formData.full_name, role: formData.role, status: formData.status, employee_id: selectedEmployeeId || undefined }
+              : u
+          )
+        );
+      } else {
+        if (!formData.email.trim()) throw new Error("Email kiritilishi shart.");
+        if (!formData.password || formData.password.length < 6) {
+          throw new Error("Parol kamida 6 belgidan iborat bo'lishi kerak.");
+        }
+
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: formData.email.trim(),
+          password: formData.password,
+          options: { data: { full_name: formData.full_name, role: formData.role } },
+        });
+        if (signUpError) throw signUpError;
+        if (!signUpData.user) throw new Error("Hisob yaratilmadi.");
+
+        // The DB trigger auto-creates a base user_profiles row; patch it with
+        // the chosen role / status / linked employee.
+        const { error: updateError } = await supabase
+          .from("user_profiles")
+          .update({
+            full_name: formData.full_name,
+            role: formData.role,
+            is_active: formData.status === "active",
+            employee_id: selectedEmployeeId || null,
+          })
+          .eq("id", signUpData.user.id);
+        if (updateError) throw updateError;
+
+        setUsers([
+          ...users,
+          {
+            id: signUpData.user.id,
+            employee_id: selectedEmployeeId || undefined,
+            full_name: formData.full_name,
+            email: formData.email.trim(),
+            role: formData.role,
+            status: formData.status,
+          },
+        ]);
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setSaveError(err?.message || "Saqlashda xato yuz berdi.");
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
     if (confirm("Ushbu foydalanuvchini o'chirishga ishonchingiz komilmi?")) {
-      await supabase.from("user_profiles").delete().eq("id", id);
+      const { error } = await supabase.from("user_profiles").delete().eq("id", id);
+      if (error) {
+        alert("O'chirishda xato yuz berdi: " + error.message);
+        return;
+      }
       setUsers(users.filter((u) => u.id !== id));
     }
   };
@@ -375,16 +517,34 @@ export default function UserManagementPage() {
 
       {activeTab === "permissions" && (
         <div className="bg-slate-800/80 rounded-2xl border border-slate-700/60 p-5 shadow-xl overflow-x-auto">
-          <p className="text-sm text-slate-400 mb-4">
-            Quyida har bir rol uchun tizim bo'limlariga kirish huquqlarini (Checkbox orqali) belgilashingiz mumkin:
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">
+              Quyida har bir rol uchun tizim bo'limlariga kirish huquqlarini (Checkbox orqali) belgilashingiz mumkin:
+            </p>
+            <button
+              onClick={openAddRole}
+              className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition font-medium text-sm whitespace-nowrap"
+            >
+              <UserPlus className="w-4 h-4" />
+              Yangi rol qo'shish
+            </button>
+          </div>
           <table className="w-full text-left border-collapse min-w-[750px]">
             <thead>
               <tr className="bg-slate-900/60 border-b border-slate-700">
                 <th className="py-3 px-4 text-xs uppercase tracking-wider text-slate-400">Bo'limlar / Modullar</th>
                 {roles.map((role) => (
                   <th key={role.id} className="py-3 px-4 text-center text-xs uppercase tracking-wider text-slate-300">
-                    <div>{role.label}</div>
+                    <div className="flex items-center justify-center gap-1.5">
+                      {role.label}
+                      <button
+                        onClick={() => handleDeleteRole(role.id)}
+                        title="Rolni o'chirish"
+                        className="text-slate-500 hover:text-rose-400 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -419,6 +579,66 @@ export default function UserManagementPage() {
         </div>
       )}
 
+      {isRoleModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 border border-slate-700 shadow-2xl text-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-4">
+              <h2 className="text-lg font-bold text-white">Yangi rol qo'shish</h2>
+              <button onClick={() => setIsRoleModalOpen(false)} className="text-slate-400 hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateRole} className="space-y-4">
+              {roleSaveError && (
+                <div className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                  {roleSaveError}
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Rol nomi</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Texnik xizmat ishchisi"
+                  value={roleFormData.label}
+                  onChange={(e) => setRoleFormData({ ...roleFormData, label: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Tavsif (ixtiyoriy)</label>
+                <input
+                  type="text"
+                  placeholder="Servis va ta'mirlash bo'yicha texnik xizmat ko'rsatish"
+                  value={roleFormData.description}
+                  onChange={(e) => setRoleFormData({ ...roleFormData, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                Yaratilgandan so'ng, bu rolga qaysi bo'limlar ruxsat etilishini "Rollar va Bo'limlar ruxsati" jadvalida belgilaysiz.
+              </p>
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setIsRoleModalOpen(false)}
+                  className="px-4 py-2 border border-slate-600 rounded-xl text-slate-300 hover:bg-slate-700 transition"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRole}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition font-medium disabled:opacity-50"
+                >
+                  {savingRole ? "Saqlanmoqda..." : "Rol qo'shish"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-5 border border-slate-700 shadow-2xl text-slate-100">
@@ -432,6 +652,11 @@ export default function UserManagementPage() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
+              {saveError && (
+                <div className="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                  {saveError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">
                   Xodimni tanlang (Employees oynasidan)
@@ -467,12 +692,31 @@ export default function UserManagementPage() {
                 <input
                   type="email"
                   required
+                  disabled={!!editingUser}
                   placeholder="ali@company.uz"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
                 />
+                {editingUser && (
+                  <p className="text-xs text-slate-500 mt-1">Email tizim hisobi bilan bog'langan, bu yerdan o'zgartirib bo'lmaydi.</p>
+                )}
               </div>
+
+              {!editingUser && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Parol</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Kamida 6 belgi"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Roli / Lavozimi</label>
@@ -513,9 +757,10 @@ export default function UserManagementPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition font-medium"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition font-medium disabled:opacity-50"
                 >
-                  Saqlash
+                  {saving ? "Saqlanmoqda..." : "Saqlash"}
                 </button>
               </div>
             </form>
