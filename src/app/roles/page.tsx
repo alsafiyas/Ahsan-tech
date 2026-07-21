@@ -47,7 +47,6 @@ export default function RolesPage() {
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
-  const [empSearch, setEmpSearch] = useState('');
 
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleEmoji, setNewRoleEmoji] = useState('');
@@ -304,149 +303,153 @@ export default function RolesPage() {
             </button>
           </div>
         ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="space-y-2">
-            {roles.map((role) => (
-              <button
-                key={role.id}
-                onClick={() => setSelectedRole(role)}
-                className={`w-full card p-4 text-left transition-all ${selectedRole?.id === role.id ? 'border-primary/50 bg-primary/5' : 'hover:border-primary/20'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{role.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground text-sm">{role.name}</p>
-                    <p className="text-xs text-muted-foreground">{getAssignedEmployees(role.id).length} foydalanuvchi</p>
-                  </div>
-                  {selectedRole?.id === role.id && <AppIcon name="ChevronRightIcon" size={14} style={{ color: 'var(--primary)' }} />}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {selectedRole && (
-          <div className="lg:col-span-3 space-y-4">
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{selectedRole.emoji}</span>
-                  <div>
-                    <h3 className="font-semibold text-foreground">{selectedRole.name}</h3>
-                    <p className="text-xs text-muted-foreground">{selectedRole.description}</p>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="space-y-2">
+              {roles.map((role) => (
                 <button
-                  onClick={openAssignModal}
-                  className="btn-secondary flex items-center gap-2 text-xs"
+                  key={role.id}
+                  onClick={() => setSelectedRole(role)}
+                  className={`w-full card p-4 text-left transition-all ${selectedRole?.id === role.id ? 'border-primary/50 bg-primary/5' : 'hover:border-primary/20'}`}
                 >
-                  <AppIcon name="UserPlusIcon" size={14} />
-                  Xodim belgilash
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{role.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground text-sm">{role.name}</p>
+                      <p className="text-xs text-muted-foreground">{getAssignedEmployees(role.id).length} foydalanuvchi</p>
+                    </div>
+                    {selectedRole?.id === role.id && <AppIcon name="ChevronRightIcon" size={14} style={{ color: 'var(--primary)' }} />}
+                  </div>
                 </button>
-              </div>
-              <div className="px-5 py-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  Tayinlangan xodimlar ({assignedEmployees.length})
-                </p>
-                {empLoading ? (
-                  <p className="text-xs text-muted-foreground">Yuklanmoqda...</p>
-                ) : assignedEmployees.length === 0 ? (
-                  <div className="flex flex-col items-center py-6 text-center">
-                    <AppIcon name="UsersIcon" size={32} className="text-muted-foreground mb-2 opacity-40" />
-                    <p className="text-sm text-muted-foreground">Hali xodim tayinlanmagan</p>
-                    <button onClick={openAssignModal} className="mt-2 text-xs text-primary hover:underline">
-                      Xodim qo'shish
+              ))}
+            </div>
+
+            {selectedRole && (
+              <div className="lg:col-span-3 space-y-4">
+                <div className="card overflow-hidden">
+                  <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{selectedRole.emoji}</span>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{selectedRole.name}</h3>
+                        <p className="text-xs text-muted-foreground">{selectedRole.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={openAssignModal}
+                      className="btn-secondary flex items-center gap-2 text-xs"
+                    >
+                      <AppIcon name="UserPlusIcon" size={14} />
+                      Xodim belgilash
                     </button>
                   </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {assignedEmployees.map((emp) => (
-                      <div
-                        key={emp.id}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
-                        style={{ background: 'var(--secondary)', color: 'var(--foreground)' }}
-                      >
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                          style={{ background: 'var(--primary)' }}>
-                          {emp.full_name.charAt(0).toUpperCase()}
-                        </div>
-                        <span>{emp.full_name}</span>
-                        <span className="text-muted-foreground">· {emp.position || '—'}</span>
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                      Tayinlangan xodimlar ({assignedEmployees.length})
+                    </p>
+                    {empLoading ? (
+                      <p className="text-xs text-muted-foreground">Yuklanmoqda...</p>
+                    ) : assignedEmployees.length === 0 ? (
+                      <div className="flex flex-col items-center py-6 text-center">
+                        <AppIcon name="UsersIcon" size={32} className="text-muted-foreground mb-2 opacity-40" />
+                        <p className="text-sm text-muted-foreground">Hali xodim tayinlanmagan</p>
+                        <button onClick={openAssignModal} className="mt-2 text-xs text-primary hover:underline">
+                          Xodim qo'shish
+                        </button>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {assignedEmployees.map((emp) => (
+                          <div
+                            key={emp.id}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+                            style={{ background: 'var(--secondary)', color: 'var(--foreground)' }}
+                          >
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                              style={{ background: 'var(--primary)' }}>
+                              {emp.full_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span>{emp.full_name}</span>
+                            <span className="text-muted-foreground">· {emp.position || '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
 
-            <div className="card overflow-hidden">
-              <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ruxsatlar matritsasi</p>
-                {permDirty && (
-                  <span className="text-xs font-medium" style={{ color: 'var(--warning)' }}>Saqlanmagan o'zgarishlar bor</span>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Modul</th>
-                      {[t.roles_permission_view, t.roles_permission_add, t.roles_permission_edit, t.roles_permission_delete, t.roles_permission_export].map((h) => (
-                        <th key={h} className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modules.map((mod) => {
-                      const perms = draftPermissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
-                      return (
-                        <tr key={mod} className="border-b hover:bg-secondary/20 transition-colors" style={{ borderColor: 'var(--border)' }}>
-                          <td className="px-4 py-3 text-xs font-medium text-foreground">{mod}</td>
-                          {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => {
-                            const active = perms[perm];
-                            return (
-                              <td key={perm} className="px-4 py-3 text-center">
-                                <label className="inline-flex items-center justify-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={active}
-                                    onChange={() => togglePerm(mod, perm)}
-                                    className="w-5 h-5 rounded cursor-pointer accent-primary"
-                                    style={{ accentColor: 'var(--primary)' }}
-                                  />
-                                </label>
-                              </td>
-                            );
-                          })}
+                {/* Ruxsatlar matritsasi */}
+                <div className="card overflow-hidden">
+                  <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ruxsatlar matritsasi</p>
+                    {permDirty && (
+                      <span className="text-xs font-medium" style={{ color: 'var(--warning)' }}>Saqlanmagan o'zgarishlar bor</span>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Modul</th>
+                          {[t.roles_permission_view, t.roles_permission_add, t.roles_permission_edit, t.roles_permission_delete, t.roles_permission_export].map((h) => (
+                            <th key={h} className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                          ))}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {modules.map((mod) => {
+                          const perms = draftPermissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
+                          return (
+                            <tr key={mod} className="border-b hover:bg-secondary/20 transition-colors" style={{ borderColor: 'var(--border)' }}>
+                              <td className="px-4 py-3 text-xs font-medium text-foreground">{mod}</td>
+                              {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => {
+                                const active = perms[perm];
+                                return (
+                                  <td key={perm} className="px-4 py-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePerm(mod, perm)}
+                                      className={`w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-bold transition-all cursor-pointer ${
+                                        active
+                                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                          : 'bg-rose-500/10 text-rose-500 border border-rose-500/20 opacity-50 hover:opacity-100'
+                                      }`}
+                                    >
+                                      {active ? '✓' : '✕'}
+                                    </button>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-5 py-3 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--border)' }}>
+                    <button
+                      onClick={handleResetPermissions}
+                      disabled={!permDirty}
+                      className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Bekor qilish
+                    </button>
+                    <button
+                      onClick={handleSavePermissions}
+                      disabled={!permDirty || savingPerms}
+                      className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingPerms && <AppIcon name="ArrowPathIcon" size={14} className="animate-spin" />}
+                      Ruxsatlarni saqlash
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="px-5 py-3 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--border)' }}>
-                <button
-                  onClick={handleResetPermissions}
-                  disabled={!permDirty}
-                  className="btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  onClick={handleSavePermissions}
-                  disabled={!permDirty || savingPerms}
-                  className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {savingPerms && <AppIcon name="ArrowPathIcon" size={14} className="animate-spin" />}
-                  Ruxsatlarni saqlash
-                </button>
-              </div>
-            </div>
+            )}
           </div>
-          )}
-        </div>
         )}
       </div>
 
+      {/* Yangi rol qo'shish modali */}
       {showAddRole && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowAddRole(false)}>
           <div className="card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -506,7 +509,7 @@ export default function RolesPage() {
                 </select>
               </div>
 
-              {/* Permission selection */}
+              {/* Modal ichidagi ruxsatlar tanlash jadvali */}
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">Ruxsatlarni tanlash</label>
                 <div className="border rounded-lg overflow-hidden max-h-56 overflow-y-auto" style={{ borderColor: 'var(--border)' }}>
@@ -529,15 +532,17 @@ export default function RolesPage() {
                               const active = perms[perm];
                               return (
                                 <td key={perm} className="px-2 py-2 text-center">
-                                  <label className="inline-flex items-center justify-center cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={active}
-                                      onChange={() => toggleNewRolePerm(mod, perm)}
-                                      className="w-4 h-4 rounded cursor-pointer"
-                                      style={{ accentColor: 'var(--primary)' }}
-                                    />
-                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleNewRolePerm(mod, perm)}
+                                    className={`w-6 h-6 mx-auto rounded flex items-center justify-center text-[10px] font-bold transition-all cursor-pointer ${
+                                      active
+                                        ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30'
+                                        : 'bg-rose-500/10 text-rose-500 border border-rose-500/20 opacity-50 hover:opacity-100'
+                                    }`}
+                                  >
+                                    {active ? '✓' : '✕'}
+                                  </button>
                                 </td>
                               );
                             })}
@@ -624,6 +629,7 @@ export default function RolesPage() {
         </div>
       )}
 
+      {/* Xodimlarni biriktirish modali */}
       {showAssignModal && selectedRole && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowAssignModal(false)}>
           <div className="card w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
