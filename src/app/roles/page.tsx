@@ -405,16 +405,15 @@ export default function RolesPage() {
                             const active = perms[perm];
                             return (
                               <td key={perm} className="px-4 py-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => togglePerm(mod, perm)}
-                                  className="inline-flex mx-auto"
-                                  title={active ? "O'chirish uchun bosing" : 'Yoqish uchun bosing'}
-                                >
-                                  <div className="w-5 h-5 rounded flex items-center justify-center transition-colors" style={{ background: active ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.1)' }}>
-                                    <AppIcon name={active ? 'CheckIcon' : 'XMarkIcon'} size={12} style={{ color: active ? 'var(--success)' : 'var(--danger)' }} />
-                                  </div>
-                                </button>
+                                <label className="inline-flex items-center justify-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={active}
+                                    onChange={() => togglePerm(mod, perm)}
+                                    className="w-5 h-5 rounded cursor-pointer accent-primary"
+                                    style={{ accentColor: 'var(--primary)' }}
+                                  />
+                                </label>
                               </td>
                             );
                           })}
@@ -530,15 +529,15 @@ export default function RolesPage() {
                               const active = perms[perm];
                               return (
                                 <td key={perm} className="px-2 py-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleNewRolePerm(mod, perm)}
-                                    className="inline-flex mx-auto"
-                                  >
-                                    <div className="w-4 h-4 rounded flex items-center justify-center transition-colors" style={{ background: active ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.1)' }}>
-                                      <AppIcon name={active ? 'CheckIcon' : 'XMarkIcon'} size={10} style={{ color: active ? 'var(--success)' : 'var(--danger)' }} />
-                                    </div>
-                                  </button>
+                                  <label className="inline-flex items-center justify-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={active}
+                                      onChange={() => toggleNewRolePerm(mod, perm)}
+                                      className="w-4 h-4 rounded cursor-pointer"
+                                      style={{ accentColor: 'var(--primary)' }}
+                                    />
+                                  </label>
                                 </td>
                               );
                             })}
