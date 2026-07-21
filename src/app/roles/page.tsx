@@ -54,6 +54,7 @@ export default function RolesPage() {
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [newRoleCopyFrom, setNewRoleCopyFrom] = useState('');
   const [newRoleEmployeeIds, setNewRoleEmployeeIds] = useState<string[]>([]);
+  const [newRolePermissions, setNewRolePermissions] = useState<Record<string, PermSet>>(emptyPermissions());
   const [addEmpSearch, setAddEmpSearch] = useState('');
   const [creatingRole, setCreatingRole] = useState(false);
   const [addRoleError, setAddRoleError] = useState<string | null>(null);
@@ -129,9 +130,23 @@ export default function RolesPage() {
     setNewRoleDesc('');
     setNewRoleCopyFrom('');
     setNewRoleEmployeeIds([]);
+    setNewRolePermissions(emptyPermissions());
     setAddEmpSearch('');
     setAddRoleError(null);
     setShowAddRole(true);
+  };
+
+  const handleCopyFromChange = (roleName: string) => {
+    setNewRoleCopyFrom(roleName);
+    const source = roles.find((r) => r.name === roleName);
+    setNewRolePermissions(source ? { ...source.permissions } : emptyPermissions());
+  };
+
+  const toggleNewRolePerm = (mod: string, perm: keyof PermSet) => {
+    setNewRolePermissions((prev) => ({
+      ...prev,
+      [mod]: { ...(prev[mod] || { view: false, create: false, edit: false, delete: false, export: false }), [perm]: !prev[mod]?.[perm] },
+    }));
   };
 
   const openAssignModal = () => {
@@ -150,16 +165,13 @@ export default function RolesPage() {
     setCreatingRole(true);
     setAddRoleError(null);
     try {
-      const copySource = roles.find((r) => r.name === newRoleCopyFrom);
-      const perms = copySource ? { ...copySource.permissions } : emptyPermissions();
-
       const { data, error } = await supabase
         .from('roles')
         .insert({
           name: newRoleName.trim(),
           emoji: newRoleEmoji.trim() || '🔑',
           description: newRoleDesc.trim() || '',
-          permissions: perms,
+          permissions: newRolePermissions,
         })
         .select('id, name, emoji, description, permissions')
         .single();
@@ -488,11 +500,54 @@ export default function RolesPage() {
                 <select
                   className="input w-full text-sm"
                   value={newRoleCopyFrom}
-                  onChange={(e) => setNewRoleCopyFrom(e.target.value)}
+                  onChange={(e) => handleCopyFromChange(e.target.value)}
                 >
                   <option value="">— Noldan boshlash —</option>
                   {roles.map((r) => <option key={r.id}>{r.name}</option>)}
                 </select>
+              </div>
+
+              {/* Permission selection */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Ruxsatlarni tanlash</label>
+                <div className="border rounded-lg overflow-hidden max-h-56 overflow-y-auto" style={{ borderColor: 'var(--border)' }}>
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0" style={{ background: 'var(--card)' }}>
+                      <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+                        <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Modul</th>
+                        {[t.roles_permission_view, t.roles_permission_add, t.roles_permission_edit, t.roles_permission_delete, t.roles_permission_export].map((h) => (
+                          <th key={h} className="px-2 py-2 text-center font-semibold text-muted-foreground">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modules.map((mod) => {
+                        const perms = newRolePermissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
+                        return (
+                          <tr key={mod} className="border-b hover:bg-secondary/20" style={{ borderColor: 'var(--border)' }}>
+                            <td className="px-3 py-2 font-medium text-foreground whitespace-nowrap">{mod}</td>
+                            {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => {
+                              const active = perms[perm];
+                              return (
+                                <td key={perm} className="px-2 py-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleNewRolePerm(mod, perm)}
+                                    className="inline-flex mx-auto"
+                                  >
+                                    <div className="w-4 h-4 rounded flex items-center justify-center transition-colors" style={{ background: active ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.1)' }}>
+                                      <AppIcon name={active ? 'CheckIcon' : 'XMarkIcon'} size={10} style={{ color: active ? 'var(--success)' : 'var(--danger)' }} />
+                                    </div>
+                                  </button>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div>
