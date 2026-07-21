@@ -32,7 +32,7 @@ export function useSidebarBadges(): SidebarBadges {
       const [crmRes, salesRes, serviceRes, notifRes] = await Promise.allSettled([
         // CRM: customers added in last 7 days
         supabase
-          .from('crm_customers')
+          .from('customers')
           .select('id', { count: 'exact', head: true })
           .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
 
@@ -46,7 +46,7 @@ export function useSidebarBadges(): SidebarBadges {
         supabase
           .from('service_tickets')
           .select('id', { count: 'exact', head: true })
-          .in('ticket_status', ['pending', 'repairing', 'service', 'ready', 'assigned']),
+          .in('ticket_status', ['pending', 'repairing', 'service', 'ready']),
 
         // Notifications: unread alerts
         supabase
