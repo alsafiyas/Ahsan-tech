@@ -43,9 +43,11 @@ export default function RolesPage() {
   const supabase = createClient();
 
   const [roles, setRoles] = useState<Role[]>(mockRoles);
-  const [selectedRole, setSelectedRole] = useState<Role | null>(mockRoles[0] ?? null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [rolesLoading, setRolesLoading] = useState(true);
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [savingPerms, setSavingPerms] = useState(false);
 
   // Employees state
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -76,6 +78,40 @@ export default function RolesPage() {
     setEmpLoading(false);
   }, [supabase]);
 
+  const fetchRoles = useCallback(async () => {
+    setRolesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('custom_roles')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (!error && data) {
+        const mapped: Role[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          emoji: r.emoji || '🔑',
+          description: r.description || '',
+          userCount: r.user_count || 0,
+          permissions: r.permissions || {},
+          assignedEmployeeIds: r.assigned_employee_ids || [],
+        }));
+        setRoles(mapped);
+        setSelectedRole((prev) => {
+          if (prev) {
+            const stillExists = mapped.find((m) => m.id === prev.id);
+            if (stillExists) return stillExists;
+          }
+          return mapped[0] ?? null;
+        });
+      }
+    } catch (_) {}
+    setRolesLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchRoles();
+  }, [fetchRoles]);
+
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
@@ -101,8 +137,11 @@ export default function RolesPage() {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
 
-  const handleCreateRole = () => {
-    if (!newRoleName.trim()) return;
+  const [creatingRole, setCreatingRole] = useState(false);
+
+  const handleCreateRole = async () => {
+    if (!newRoleName.trim() || creatingRole) return;
+    setCreatingRole(true);
     const copySource = roles.find((r) => r.name === newRoleCopyFrom);
     const perms = copySource
       ? { ...copySource.permissions }
@@ -116,22 +155,42 @@ export default function RolesPage() {
       permissions: perms,
       assignedEmployeeIds: newRoleEmployeeIds,
     };
-    const updated = [...roles, newRole];
-    setRoles(updated);
-    setSelectedRole(newRole);
-    setShowAddRole(false);
+    try {
+      const { error } = await supabase.from('custom_roles').insert({
+        id: newRole.id,
+        name: newRole.name,
+        emoji: newRole.emoji,
+        description: newRole.description,
+        permissions: newRole.permissions,
+        assigned_employee_ids: newRole.assignedEmployeeIds,
+        user_count: newRole.userCount,
+      });
+      if (error) throw error;
+      setRoles((prev) => [...prev, newRole]);
+      setSelectedRole(newRole);
+      setShowAddRole(false);
+    } catch (e) {
+      alert("Rol saqlashda xato yuz berdi. Supabase'da 'custom_roles' jadvali yaratilganini tekshiring.");
+    } finally {
+      setCreatingRole(false);
+    }
   };
 
-  const handleSaveAssign = () => {
+  const handleSaveAssign = async () => {
     if (!selectedRole) return;
-    const updated = roles.map((r) =>
-      r.id === selectedRole.id
-        ? { ...r, assignedEmployeeIds: assignEmployeeIds, userCount: assignEmployeeIds.length }
-        : r
-    );
-    setRoles(updated);
-    setSelectedRole({ ...selectedRole, assignedEmployeeIds: assignEmployeeIds, userCount: assignEmployeeIds.length });
-    setShowAssignModal(false);
+    const updatedRole = { ...selectedRole, assignedEmployeeIds: assignEmployeeIds, userCount: assignEmployeeIds.length };
+    try {
+      const { error } = await supabase
+        .from('custom_roles')
+        .update({ assigned_employee_ids: assignEmployeeIds, user_count: assignEmployeeIds.length })
+        .eq('id', selectedRole.id);
+      if (error) throw error;
+      setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? updatedRole : r)));
+      setSelectedRole(updatedRole);
+      setShowAssignModal(false);
+    } catch (e) {
+      alert('Xodimlarni biriktirishda xato yuz berdi.');
+    }
   };
 
   const assignedEmployees = employees.filter((e) => (selectedRole?.assignedEmployeeIds || []).includes(e.id));
@@ -161,7 +220,11 @@ export default function RolesPage() {
           </button>
         </div>
 
-        {roles.length === 0 ? (
+        {rolesLoading ? (
+          <div className="card flex items-center justify-center py-16">
+            <p className="text-sm text-muted-foreground">Yuklanmoqda...</p>
+          </div>
+        ) : roles.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-16 text-center">
             <AppIcon name="ShieldCheckIcon" size={40} className="text-muted-foreground mb-3 opacity-40" />
             <p className="font-medium text-foreground mb-1">Hali rol yaratilmagan</p>
@@ -266,25 +329,36 @@ export default function RolesPage() {
                   </thead>
                   <tbody>
                     {modules.map((mod) => {
-                      const perms = selectedRole.permissions[mod];
+                      const perms = selectedRole.permissions[mod] || { view: false, create: false, edit: false, delete: false, export: false };
                       return (
                         <tr key={mod} className="border-b hover:bg-secondary/20 transition-colors" style={{ borderColor: 'var(--border)' }}>
                           <td className="px-4 py-3 text-xs font-medium text-foreground">{mod}</td>
                           {(['view', 'create', 'edit', 'delete', 'export'] as const).map((perm) => (
                             <td key={perm} className="px-4 py-3 text-center">
-                              {perms[perm] ? (
-                                <div className="flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRole((prev) => {
+                                    if (!prev) return prev;
+                                    const nextPerms = {
+                                      ...prev.permissions,
+                                      [mod]: { ...(prev.permissions[mod] || perms), [perm]: !perms[perm] },
+                                    };
+                                    return { ...prev, permissions: nextPerms };
+                                  });
+                                }}
+                                className="inline-flex justify-center"
+                              >
+                                {perms[perm] ? (
                                   <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'rgba(34, 197, 94, 0.15)' }}>
                                     <AppIcon name="CheckIcon" size={12} style={{ color: 'var(--success)' }} />
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="flex justify-center">
+                                ) : (
                                   <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
                                     <AppIcon name="XMarkIcon" size={12} style={{ color: 'var(--danger)' }} />
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </button>
                             </td>
                           ))}
                         </tr>
@@ -294,8 +368,29 @@ export default function RolesPage() {
                 </table>
               </div>
               <div className="px-5 py-3 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--border)' }}>
-                <button className="btn-secondary text-sm">Standartga qaytarish</button>
-                <button className="btn-primary text-sm">Ruxsatlarni saqlash</button>
+                <button onClick={fetchRoles} className="btn-secondary text-sm">Standartga qaytarish</button>
+                <button
+                  disabled={savingPerms}
+                  onClick={async () => {
+                    if (!selectedRole) return;
+                    setSavingPerms(true);
+                    try {
+                      const { error } = await supabase
+                        .from('custom_roles')
+                        .update({ permissions: selectedRole.permissions })
+                        .eq('id', selectedRole.id);
+                      if (error) throw error;
+                      setRoles((prev) => prev.map((r) => (r.id === selectedRole.id ? selectedRole : r)));
+                    } catch (e) {
+                      alert('Ruxsatlarni saqlashda xato yuz berdi.');
+                    } finally {
+                      setSavingPerms(false);
+                    }
+                  }}
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  {savingPerms ? 'Saqlanmoqda...' : 'Ruxsatlarni saqlash'}
+                </button>
               </div>
             </div>
           </div>
