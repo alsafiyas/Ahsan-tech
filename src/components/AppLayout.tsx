@@ -18,7 +18,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace('/login-screen');
+      const t = setTimeout(() => router.replace('/login-screen'), 500);
+      return () => clearTimeout(t);
     }
   }, [user, loading, router]);
 

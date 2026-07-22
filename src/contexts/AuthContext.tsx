@@ -56,16 +56,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth changes — only clear user on explicit sign-out
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      } else {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
         setUserRole(null);
+      } else if (session) {
+        setSession(session);
+        setUser(session.user);
+        fetchUserRole(session.user.id);
       }
       setLoading(false);
     });

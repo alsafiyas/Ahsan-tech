@@ -362,22 +362,26 @@ export function useDashboardData(role?: string | null): DashboardData {
     fetchCritical();
     const chartTimer = setTimeout(() => fetchCharts(), 400);
 
-    // ── Single consolidated channel ───────────────────────────────────────
-    const channel = supabase
-      .channel('dashboard_consolidated')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_tickets' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'installations' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, scheduleRefresh)
-      .subscribe();
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel('dashboard_consolidated')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_tickets' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'installations' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, scheduleRefresh)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'alerts' }, scheduleRefresh)
+        .subscribe();
+    } catch {
+      // Realtime subscriptions are optional — don't crash the dashboard
+    }
 
     return () => {
       clearTimeout(chartTimer);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [fetchCritical, fetchCharts, scheduleRefresh]);
 
