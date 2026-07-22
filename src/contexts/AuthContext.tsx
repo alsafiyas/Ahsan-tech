@@ -121,6 +121,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       if (error) throw error;
 
+      // Immediately update local state so navigation can proceed
+      setSession(data.session);
+      setUser(data.user);
+      if (data.user) {
+        fetchUserRole(data.user.id);
+      }
+
       // Log successful login (not critical — no alert needed)
       await logAuditAction({
         action: 'login_success',
