@@ -159,8 +159,14 @@ export default function RolesPage() {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
 
+  // ─────────────────────────────────────────────────────────
+  // DIQQAT: bu funksiya ichida VAQTINCHALIK debug alert'lar bor
+  // (muammoni topish uchun). Muammo topilgach, bularni olib
+  // tashlab, oddiy holatga qaytarish kerak.
+  // ─────────────────────────────────────────────────────────
   const handleCreateRole = async () => {
     if (!newRoleName.trim()) return;
+    alert('Funksiya ishga tushdi: ' + newRoleName);
     setCreatingRole(true);
     setAddRoleError(null);
     try {
@@ -177,6 +183,8 @@ export default function RolesPage() {
 
       if (error) throw error;
 
+      alert('Insert muvaffaqiyatli: ' + JSON.stringify(data));
+
       if (newRoleEmployeeIds.length > 0) {
         const { error: assignError } = await supabase
           .from('employees')
@@ -191,6 +199,7 @@ export default function RolesPage() {
       setSelectedRole(newRole);
       setShowAddRole(false);
     } catch (err: any) {
+      alert('XATO: ' + JSON.stringify(err));
       setAddRoleError(err?.message || 'Rol yaratishda xatolik yuz berdi');
     } finally {
       setCreatingRole(false);
