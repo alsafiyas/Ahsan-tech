@@ -45,13 +45,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session — always resolve loading
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserRole(session.user.id);
       }
+    }).catch(() => {}).finally(() => {
       setLoading(false);
     });
 
@@ -95,8 +96,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       ).catch(() => {});
     }
 
-    // Log user creation with admin alert
-    await logAuditActionWithAlert(
+    // Fire-and-forget audit log
+    logAuditActionWithAlert(
       {
         action: 'user_created',
         actorId: data.user?.id,
@@ -106,8 +107,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         targetEmail: email,
         details: { full_name: metadata?.fullName || '' },
       },
-      [] // Admin emails fetched server-side via edge function context
-    );
+      []
+    ).catch(() => {});
 
     return data;
   };
@@ -129,8 +130,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         fetchUserRole(data.user.id);
       }
 
-      // Log successful login (not critical — no alert needed)
-      await logAuditAction({
+      // Fire-and-forget audit log — must not block navigation
+      logAuditAction({
         action: 'login_success',
         actorId: data.user?.id,
         actorEmail: email,
@@ -138,12 +139,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         targetUserId: data.user?.id,
         targetEmail: email,
         details: {},
-      });
+      }).catch(() => {});
 
       return data;
     } catch (err: any) {
-      // Log failed login attempt with admin alert
-      await logAuditActionWithAlert(
+      // Fire-and-forget — must not block error propagation
+      logAuditActionWithAlert(
         {
           action: 'login_failed',
           actorId: undefined,
@@ -152,8 +153,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           targetEmail: email,
           details: { reason: err?.message || 'Invalid credentials' },
         },
-        [] // Admin emails resolved via edge function
-      );
+        []
+      ).catch(() => {});
       throw err;
     }
   };
