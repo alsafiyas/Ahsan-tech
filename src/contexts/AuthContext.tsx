@@ -45,18 +45,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Get initial session — always resolve loading
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      }
-    }).catch(() => {}).finally(() => {
-      setLoading(false);
-    });
-
-    // Listen for auth changes — only clear user on explicit sign-out
+    // onAuthStateChange fires INITIAL_SESSION on subscription with the current session
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((event, session) => {
