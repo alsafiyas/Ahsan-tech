@@ -124,6 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Immediately update local state so navigation can proceed
       setSession(data.session);
       setUser(data.user);
+      setLoading(false);
       if (data.user) {
         fetchUserRole(data.user.id);
       }
