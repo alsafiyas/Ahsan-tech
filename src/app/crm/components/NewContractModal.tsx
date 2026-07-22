@@ -25,7 +25,7 @@ export default function NewContractModal({ open, customerId, onClose, onSaved }:
     start_date: today,
     end_date: nextYear,
     amount: '',
-    status: 'active\' as \'active\' | \'expired\' | \'pending\' | \'cancelled',
+    status: 'active' as 'active' | 'expired' | 'pending' | 'cancelled',
     object: '',
     notes: '',
   });

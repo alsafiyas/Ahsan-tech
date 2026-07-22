@@ -25,7 +25,7 @@ export default function AddCustomerModal({ open, onClose, onSaved }: AddCustomer
     address: '',
     district: '',
     city: 'Toshkent',
-    status: 'active\' as \'active\' | \'inactive\' | \'vip',
+    status: 'active' as 'active' | 'inactive' | 'vip',
     notes: '',
   });
 
