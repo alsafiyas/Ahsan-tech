@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import AppIcon from '@/components/ui/AppIcon';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { useLanguage } from '@/context/LanguageContext';
+import { createClient } from '@/lib/supabase/client';
 
 interface Branch {
   id: string;
@@ -20,12 +21,6 @@ interface Branch {
   openedDate: string;
 }
 
-const initialBranches: Branch[] = [
-  { id: 'B001', name: 'Namangan Bosh ofis', city: 'Namangan', address: 'Mustaqillik ko\'chasi 45, Namangan', manager: 'Akbar Toshmatov', phone: '+998 69 123 4567', employees: 8, monthlySales: 215000000, stockValue: 485000000, status: 'active', openedDate: '2022-01-01' },
-  { id: 'B002', name: 'Samarkand filiali', city: 'Samarkand', address: 'Registon ko\'chasi 12, Samarkand', manager: 'Jasur Mirzayev', phone: '+998 66 234 5678', employees: 3, monthlySales: 68000000, stockValue: 125000000, status: 'active', openedDate: '2023-03-15' },
-  { id: 'B003', name: 'Buxoro filiali', city: 'Bukhara', address: 'Markaziy ko\'cha 8, Bukhara', manager: 'Kamola Ergasheva', phone: '+998 65 345 6789', employees: 2, monthlySales: 32000000, stockValue: 58000000, status: 'active', openedDate: '2024-06-01' },
-];
-
 const emptyBranch = (): Omit<Branch, 'id'> => ({
   name: '', city: '', address: '', manager: '', phone: '',
   employees: 0, monthlySales: 0, stockValue: 0, status: 'active',
@@ -38,18 +33,60 @@ const formatUZS = (n: number) => {
   return new Intl.NumberFormat('uz-UZ').format(n) + ' UZS';
 };
 
+const mapRow = (r: any): Branch => ({
+  id: r.id,
+  name: r.name,
+  city: r.city,
+  address: r.address,
+  manager: r.manager,
+  phone: r.phone,
+  employees: r.employees ?? 0,
+  monthlySales: r.monthly_sales ?? 0,
+  stockValue: r.stock_value ?? 0,
+  status: r.status ?? 'active',
+  openedDate: r.opened_date ?? '',
+});
+
+const toRow = (b: Omit<Branch, 'id'>) => ({
+  name: b.name,
+  city: b.city,
+  address: b.address,
+  manager: b.manager,
+  phone: b.phone,
+  employees: b.employees,
+  monthly_sales: b.monthlySales,
+  stock_value: b.stockValue,
+  status: b.status,
+  opened_date: b.openedDate,
+});
+
 export default function BranchesPage() {
   const { t } = useLanguage();
-  const [branches, setBranches] = useState<Branch[]>(initialBranches);
+  const supabase = createClient();
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [showAddBranch, setShowAddBranch] = useState(false);
   const [editBranch, setEditBranch] = useState<Branch | null>(null);
   const [formData, setFormData] = useState<Omit<Branch, 'id'>>(emptyBranch());
   const [formError, setFormError] = useState<string | null>(null);
 
+  const fetchBranches = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('branches')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (!error && data) {
+      setBranches(data.map(mapRow));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBranches(); }, [fetchBranches]);
+
   const totalEmployees = branches.reduce((s, b) => s + b.employees, 0);
   const totalSales = branches.reduce((s, b) => s + b.monthlySales, 0);
-  const totalStock = branches.reduce((s, b) => s + b.stockValue, 0);
 
   const openAdd = () => {
     setFormData(emptyBranch());
@@ -64,35 +101,41 @@ export default function BranchesPage() {
     setSelectedBranch(null);
   };
 
-  const handleSaveAdd = () => {
+  const handleSaveAdd = async () => {
     if (!formData.name.trim() || !formData.city.trim()) {
       setFormError('Filial nomi va shahar majburiy');
       return;
     }
-    const newBranch: Branch = {
-      ...formData,
-      id: `B${String(branches.length + 1).padStart(3, '0')}`,
-    };
-    setBranches((prev) => [...prev, newBranch]);
+    const { error } = await supabase.from('branches').insert(toRow(formData));
+    if (error) { setFormError('Saqlashda xatolik: ' + error.message); return; }
     setShowAddBranch(false);
+    fetchBranches();
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!formData.name.trim() || !formData.city.trim()) {
       setFormError('Filial nomi va shahar majburiy');
       return;
     }
-    setBranches((prev) => prev.map((b) => b.id === editBranch?.id ? { ...b, ...formData } : b));
+    if (!editBranch) return;
+    const { error } = await supabase.from('branches').update(toRow(formData)).eq('id', editBranch.id);
+    if (error) { setFormError('Yangilashda xatolik: ' + error.message); return; }
     setEditBranch(null);
+    fetchBranches();
   };
 
-  const handleDelete = (id: string) => {
-    setBranches((prev) => prev.filter((b) => b.id !== id));
+  const handleDelete = async (id: string) => {
+    await supabase.from('branches').delete().eq('id', id);
     setSelectedBranch(null);
+    fetchBranches();
   };
 
-  const handleToggleStatus = (id: string) => {
-    setBranches((prev) => prev.map((b) => b.id === id ? { ...b, status: b.status === 'active' ? 'inactive' : 'active' } : b));
+  const handleToggleStatus = async (id: string) => {
+    const b = branches.find(x => x.id === id);
+    if (!b) return;
+    const newStatus = b.status === 'active' ? 'inactive' : 'active';
+    await supabase.from('branches').update({ status: newStatus }).eq('id', id);
+    fetchBranches();
   };
 
   const BranchForm = ({ onSave, onCancel, title }: { onSave: () => void; onCancel: () => void; title: string }) => (
@@ -167,7 +210,6 @@ export default function BranchesPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t.branches_title}</h1>
@@ -179,7 +221,6 @@ export default function BranchesPage() {
           </button>
         </div>
 
-        {/* Summary Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[
             { label: t.branches_total_branches, value: branches.length, icon: 'BuildingOfficeIcon', color: 'var(--primary)' },
@@ -200,72 +241,75 @@ export default function BranchesPage() {
           ))}
         </div>
 
-        {/* Branch Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {branches.map((branch) => (
-            <div
-              key={branch.id}
-              className="card p-5 cursor-pointer hover:border-primary/40 transition-colors"
-              onClick={() => setSelectedBranch(branch)}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--primary)20' }}>
-                    <AppIcon name="BuildingOfficeIcon" size={20} style={{ color: 'var(--primary)' }} />
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <AppIcon name="ArrowPathIcon" size={24} className="animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {branches.map((branch) => (
+              <div
+                key={branch.id}
+                className="card p-5 cursor-pointer hover:border-primary/40 transition-colors"
+                onClick={() => setSelectedBranch(branch)}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--primary)20' }}>
+                      <AppIcon name="BuildingOfficeIcon" size={20} style={{ color: 'var(--primary)' }} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">{branch.name}</p>
+                      <p className="text-xs text-muted-foreground">{branch.city}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{branch.name}</p>
-                    <p className="text-xs text-muted-foreground">{branch.city}</p>
+                  <StatusBadge status={branch.status === 'active' ? 'active' : 'inactive'} label={branch.status === 'active' ? 'Faol' : 'Nofaol'} />
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <AppIcon name="MapPinIcon" size={12} />
+                    <span className="truncate">{branch.address}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <AppIcon name="UserIcon" size={12} />
+                    <span>Menejer: {branch.manager || '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <AppIcon name="PhoneIcon" size={12} />
+                    <span>{branch.phone || '—'}</span>
                   </div>
                 </div>
-                <StatusBadge status={branch.status === 'active' ? 'active' : 'inactive'} label={branch.status === 'active' ? 'Faol' : 'Nofaol'} />
-              </div>
 
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <AppIcon name="MapPinIcon" size={12} />
-                  <span className="truncate">{branch.address}</span>
+                <div className="mt-4 pt-3 border-t grid grid-cols-3 gap-2" style={{ borderColor: 'var(--border)' }}>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-foreground">{branch.employees}</p>
+                    <p className="text-xs text-muted-foreground">Xodim</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-success">{formatUZS(branch.monthlySales)}</p>
+                    <p className="text-xs text-muted-foreground">Savdo/oy</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-primary">{formatUZS(branch.stockValue)}</p>
+                    <p className="text-xs text-muted-foreground">Ombor</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <AppIcon name="UserIcon" size={12} />
-                  <span>Menejer: {branch.manager || '—'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <AppIcon name="PhoneIcon" size={12} />
-                  <span>{branch.phone || '—'}</span>
-                </div>
-              </div>
 
-              <div className="mt-4 pt-3 border-t grid grid-cols-3 gap-2" style={{ borderColor: 'var(--border)' }}>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-foreground">{branch.employees}</p>
-                  <p className="text-xs text-muted-foreground">Xodim</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-success">{formatUZS(branch.monthlySales)}</p>
-                  <p className="text-xs text-muted-foreground">Savdo/oy</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-primary">{formatUZS(branch.stockValue)}</p>
-                  <p className="text-xs text-muted-foreground">Ombor</p>
+                <div className="mt-3 pt-3 border-t flex gap-2" style={{ borderColor: 'var(--border)' }} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => openEdit(branch)} className="flex-1 text-xs py-1.5 rounded-lg border border-border hover:bg-secondary transition-colors text-muted-foreground flex items-center justify-center gap-1">
+                    <AppIcon name="PencilIcon" size={12} /> Tahrirlash
+                  </button>
+                  <button onClick={() => handleToggleStatus(branch.id)} className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1 ${branch.status === 'active' ? 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
+                    {branch.status === 'active' ? 'O\'chirish' : 'Yoqish'}
+                  </button>
                 </div>
               </div>
-
-              {/* Quick actions */}
-              <div className="mt-3 pt-3 border-t flex gap-2" style={{ borderColor: 'var(--border)' }} onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => openEdit(branch)} className="flex-1 text-xs py-1.5 rounded-lg border border-border hover:bg-secondary transition-colors text-muted-foreground flex items-center justify-center gap-1">
-                  <AppIcon name="PencilIcon" size={12} /> Tahrirlash
-                </button>
-                <button onClick={() => handleToggleStatus(branch.id)} className={`flex-1 text-xs py-1.5 rounded-lg border transition-colors flex items-center justify-center gap-1 ${branch.status === 'active' ? 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10' : 'border-green-500/30 text-green-400 hover:bg-green-500/10'}`}>
-                  {branch.status === 'active' ? 'O\'chirish' : 'Yoqish'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Branch Detail Modal */}
       {selectedBranch && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setSelectedBranch(null)}>
           <div className="card w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -275,7 +319,7 @@ export default function BranchesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
-                ['Filial ID', selectedBranch.id],
+                ['Filial ID', selectedBranch.id.slice(0, 8) + '...'],
                 ['Shahar', selectedBranch.city],
                 ['Manzil', selectedBranch.address],
                 ['Menejer', selectedBranch.manager],
@@ -299,12 +343,10 @@ export default function BranchesPage() {
         </div>
       )}
 
-      {/* Add Branch Modal */}
       {showAddBranch && (
         <BranchForm title="Yangi filial qo'shish" onSave={handleSaveAdd} onCancel={() => setShowAddBranch(false)} />
       )}
 
-      {/* Edit Branch Modal */}
       {editBranch && (
         <BranchForm title={`Tahrirlash: ${editBranch.name}`} onSave={handleSaveEdit} onCancel={() => setEditBranch(null)} />
       )}

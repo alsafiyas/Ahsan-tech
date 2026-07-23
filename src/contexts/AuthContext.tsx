@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { logAuditAction, logAuditActionWithAlert } from '@/lib/auditLogger';
 import { sendEmailVerificationEmail } from '@/lib/emailService';
@@ -23,29 +23,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [roleLoading, setRoleLoading] = useState(false);
   const supabase = createClient();
+  const roleFetchedRef = useRef<string | null>(null);
 
   const fetchUserRole = async (userId: string) => {
+    if (roleFetchedRef.current === userId && userRole) return;
     setRoleLoading(true);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const { data, error } = await supabase
         .from('user_profiles')
         .select('role')
         .eq('id', userId)
         .maybeSingle();
-      if (!error && data) {
+      clearTimeout(timeout);
+      if (!error && data?.role) {
         setUserRole(data.role);
+        roleFetchedRef.current = userId;
       } else {
-        setUserRole(null);
+        setUserRole('Operator');
+        roleFetchedRef.current = userId;
       }
     } catch {
-      setUserRole(null);
+      setUserRole('Operator');
+      roleFetchedRef.current = userId;
     } finally {
       setRoleLoading(false);
     }
   };
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION on subscription with the current session
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -53,7 +60,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(null);
         setUser(null);
         setUserRole(null);
-      } else if (session) {
+        roleFetchedRef.current = null;
+        setLoading(false);
+        return;
+      }
+      if (session) {
         setSession(session);
         setUser(session.user);
         fetchUserRole(session.user.id);
@@ -64,7 +75,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Email/Password Sign Up
   const signUp = async (email: string, password: string, metadata: { fullName?: string; avatarUrl?: string } = {}) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -79,7 +89,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
     if (error) throw error;
 
-    // Send email verification transactional email (Supabase also sends one, this is supplemental)
     if (data.user && !data.user.email_confirmed_at) {
       sendEmailVerificationEmail(
         email,
@@ -87,7 +96,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       ).catch(() => {});
     }
 
-    // Fire-and-forget audit log
     logAuditActionWithAlert(
       {
         action: 'user_created',
@@ -104,7 +112,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return data;
   };
 
-  // Email/Password Sign In
   const signIn = async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -113,7 +120,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
       if (error) throw error;
 
-      // Immediately update local state so navigation can proceed
       setSession(data.session);
       setUser(data.user);
       setLoading(false);
@@ -121,7 +127,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         fetchUserRole(data.user.id);
       }
 
-      // Fire-and-forget audit log — must not block navigation
       logAuditAction({
         action: 'login_success',
         actorId: data.user?.id,
@@ -134,7 +139,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       return data;
     } catch (err: any) {
-      // Fire-and-forget — must not block error propagation
       logAuditActionWithAlert(
         {
           action: 'login_failed',
@@ -150,25 +154,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Sign Out
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
-  // Get Current User
   const getCurrentUser = async () => {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
     return user;
   };
 
-  // Check if Email is Verified
   const isEmailVerified = () => {
     return user?.email_confirmed_at !== null;
   };
 
-  // Get User Profile from Database
   const getUserProfile = async () => {
     if (!user) return null;
     const { data, error } = await supabase

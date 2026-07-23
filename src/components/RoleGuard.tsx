@@ -71,8 +71,16 @@ function Forbidden403() {
 
 export default function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
   const { userRole, roleLoading } = useAuth();
+  const [timedOut, setTimedOut] = React.useState(false);
 
-  if (roleLoading) {
+  React.useEffect(() => {
+    if (roleLoading) {
+      const t = setTimeout(() => setTimedOut(true), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [roleLoading]);
+
+  if (roleLoading && !timedOut) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
