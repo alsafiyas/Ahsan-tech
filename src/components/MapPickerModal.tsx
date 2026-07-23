@@ -30,10 +30,34 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => resolve();
+    document.head.appendChild(s);
+  });
+}
+
+function loadCSS(href: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (document.querySelector(`link[href="${href}"]`)) { resolve(); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+  });
+}
+
 export default function MapPickerModal({ onClose, onConfirm, initialLat, initialLng }: MapPickerModalProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const destroyedRef = useRef(false);
   const [selectedLat, setSelectedLat] = useState<number | null>(initialLat ?? null);
   const [selectedLng, setSelectedLng] = useState<number | null>(initialLng ?? null);
   const [address, setAddress] = useState('');
@@ -69,39 +93,31 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
   };
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current || typeof window === 'undefined') return;
+    destroyedRef.current = false;
 
-    let L: any;
-    let rafId: number;
+    const init = async () => {
+      await loadCSS('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+      await loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js');
 
-    const initMap = async () => {
-      L = await import('leaflet');
-
-      const cssLink = document.querySelector('link[href*="leaflet"]') || document.querySelector('style[data-leaflet]');
-      if (!cssLink) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-        await new Promise<void>((resolve) => {
-          link.onload = () => resolve();
-          link.onerror = () => resolve();
-          setTimeout(resolve, 1000);
-        });
-      }
-
-      if (!mapRef.current) return;
+      if (destroyedRef.current || !mapRef.current) return;
+      const L = (window as any).L;
+      if (!L) return;
 
       const defaultCenter: [number, number] =
         initialLat != null && initialLng != null
           ? [initialLat, initialLng]
           : [OFFICE_LAT, OFFICE_LNG];
 
-      const map = L.map(mapRef.current!, {
+      const container = mapRef.current;
+      container.innerHTML = '';
+
+      const map = L.map(container, {
         center: defaultCenter,
         zoom: 14,
         zoomControl: true,
       });
+
+      if (destroyedRef.current) { map.remove(); return; }
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
@@ -127,6 +143,7 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
       }
 
       map.on('click', (e: any) => {
+        if (destroyedRef.current) return;
         const { lat, lng } = e.latlng;
         marker.setLatLng([lat, lng]);
         setSelectedLat(lat);
@@ -135,21 +152,23 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
       });
 
       marker.on('dragend', () => {
+        if (destroyedRef.current) return;
         const pos = marker.getLatLng();
         setSelectedLat(pos.lat);
         setSelectedLng(pos.lng);
         reverseGeocode(pos.lat, pos.lng);
       });
 
+      map.invalidateSize();
       setMapReady(true);
     };
 
-    rafId = requestAnimationFrame(() => initMap());
+    init();
 
     return () => {
-      cancelAnimationFrame(rafId);
+      destroyedRef.current = true;
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try { mapInstanceRef.current.remove(); } catch {}
         mapInstanceRef.current = null;
         markerRef.current = null;
       }
