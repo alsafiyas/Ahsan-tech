@@ -72,11 +72,25 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
     if (!mapRef.current || mapInstanceRef.current || typeof window === 'undefined') return;
 
     let L: any;
+    let rafId: number;
 
     const initMap = async () => {
       L = await import('leaflet');
 
-      await import('leaflet/dist/leaflet.css');
+      const cssLink = document.querySelector('link[href*="leaflet"]') || document.querySelector('style[data-leaflet]');
+      if (!cssLink) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+        await new Promise<void>((resolve) => {
+          link.onload = () => resolve();
+          link.onerror = () => resolve();
+          setTimeout(resolve, 1000);
+        });
+      }
+
+      if (!mapRef.current) return;
 
       const defaultCenter: [number, number] =
         initialLat != null && initialLng != null
@@ -130,9 +144,10 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
       setMapReady(true);
     };
 
-    initMap();
+    rafId = requestAnimationFrame(() => initMap());
 
     return () => {
+      cancelAnimationFrame(rafId);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
