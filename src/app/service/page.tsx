@@ -671,7 +671,7 @@ export default function ServicePage() {
                   )}
                   {selectedTicket.location_lat && selectedTicket.location_lng && (
                     <a
-                      href={`https://www.google.com/maps/dir/${OFFICE_LAT},${OFFICE_LNG}/${selectedTicket.location_lat},${selectedTicket.location_lng}`}
+                      href={`https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${OFFICE_LAT},${OFFICE_LNG};${selectedTicket.location_lat},${selectedTicket.location_lng}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"

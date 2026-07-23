@@ -392,23 +392,30 @@ export default function InstallationPage() {
               )}
             </div>
 
-            {/* Google Maps: directions from Namangan office to installation address */}
+            {/* OpenStreetMap: directions from Namangan office to installation address */}
             <div className="rounded-lg overflow-hidden border border-border">
               <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground" style={{ background: 'var(--secondary)' }}>
                 <AppIcon name="MapPinIcon" size={13} style={{ color: 'var(--primary)' }} />
                 <span className="font-medium text-foreground">Ish joyi yo&apos;nalishi</span>
                 <span className="ml-auto text-muted-foreground">Namangan ishxonasidan</span>
               </div>
-              <iframe
-                title="Ish joyi xaritasi"
-                width="100%"
-                height="220"
-                style={{ border: 0, display: 'block' }}
-                loading="lazy"
-                allowFullScreen
-                referrerPolicy="no-referrer-when-downgrade"
-                src={`https://www.google.com/maps/embed/v1/directions?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}&origin=Namangan+ishxonasi,Namangan,Uzbekistan&destination=${encodeURIComponent((selectedTask.location_address || selectedTask.address) + ', Namangan, Uzbekistan')}&mode=driving`}
-              />
+              <div className="w-full" style={{ height: 220, background: '#e5e7eb' }}>
+                {selectedTask.location_lat && selectedTask.location_lng ? (
+                  <iframe
+                    title="Ish joyi xaritasi"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0, display: 'block' }}
+                    loading="lazy"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${(selectedTask.location_lng - 0.02).toFixed(4)}%2C${(selectedTask.location_lat - 0.01).toFixed(4)}%2C${(selectedTask.location_lng + 0.02).toFixed(4)}%2C${(selectedTask.location_lat + 0.01).toFixed(4)}&layer=mapnik&marker=${selectedTask.location_lat}%2C${selectedTask.location_lng}`}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    <AppIcon name="MapPinIcon" size={20} className="mr-2 opacity-50" />
+                    Joylashuv koordinatalari yo&apos;q
+                  </div>
+                )}
+              </div>
               <div className="px-3 py-2 flex items-center gap-2">
                 <AppIcon name="MapPinIcon" size={12} className="text-muted-foreground" />
                 <span className="text-xs text-muted-foreground truncate">{selectedTask.location_address || selectedTask.address}</span>
@@ -416,7 +423,10 @@ export default function InstallationPage() {
                   <span className="text-xs font-semibold flex-shrink-0" style={{ color: 'var(--primary)' }}>{selectedTask.distance_km} km</span>
                 )}
                 <a
-                  href={`https://www.google.com/maps/dir/Namangan+ishxonasi,Namangan,Uzbekistan/${encodeURIComponent((selectedTask.location_address || selectedTask.address) + ', Namangan, Uzbekistan')}`}
+                  href={selectedTask.location_lat && selectedTask.location_lng
+                    ? `https://www.openstreetmap.org/?mlat=${selectedTask.location_lat}&mlon=${selectedTask.location_lng}#map=16/${selectedTask.location_lat}/${selectedTask.location_lng}`
+                    : `https://www.openstreetmap.org/search?query=${encodeURIComponent((selectedTask.location_address || selectedTask.address) + ', Namangan, Uzbekistan')}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ml-auto text-xs font-medium flex items-center gap-1 flex-shrink-0"

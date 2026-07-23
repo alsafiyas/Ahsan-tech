@@ -32,35 +32,30 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 
 export default function MapPickerModal({ onClose, onConfirm, initialLat, initialLng }: MapPickerModalProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
   const [selectedLat, setSelectedLat] = useState<number | null>(initialLat ?? null);
   const [selectedLng, setSelectedLng] = useState<number | null>(initialLng ?? null);
   const [address, setAddress] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+  const [mapReady, setMapReady] = useState(false);
 
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
-    if (!apiKey) {
-      setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-      return;
-    }
     try {
       const res = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=uz,ru,en`
       );
       const data = await res.json();
-      if (data.results?.[0]) {
-        setAddress(data.results[0].formatted_address);
+      if (data.display_name) {
+        setAddress(data.display_name);
       } else {
         setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       }
     } catch {
       setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     }
-  }, [apiKey]);
+  }, []);
 
   const handleConfirm = () => {
     if (selectedLat == null || selectedLng == null) return;
@@ -74,100 +69,101 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
   };
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-    if (typeof window === 'undefined') return;
+    if (!mapRef.current || mapInstanceRef.current || typeof window === 'undefined') return;
 
-    const loadGoogleMaps = () => {
-      if (window.google?.maps) {
-        initMap();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&language=uz`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => initMap();
-      document.head.appendChild(script);
-    };
+    let L: any;
 
-    const initMap = () => {
-      if (!mapRef.current || !window.google?.maps) return;
+    const initMap = async () => {
+      L = await import('leaflet');
 
-      const defaultCenter = initialLat != null && initialLng != null
-        ? { lat: initialLat, lng: initialLng }
-        : { lat: OFFICE_LAT, lng: OFFICE_LNG };
+      await import('leaflet/dist/leaflet.css');
 
-      const map = new window.google.maps.Map(mapRef.current, {
+      const defaultCenter: [number, number] =
+        initialLat != null && initialLng != null
+          ? [initialLat, initialLng]
+          : [OFFICE_LAT, OFFICE_LNG];
+
+      const map = L.map(mapRef.current!, {
         center: defaultCenter,
         zoom: 14,
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
         zoomControl: true,
       });
 
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19,
+      }).addTo(map);
+
       mapInstanceRef.current = map;
 
-      const marker = new window.google.maps.Marker({
-        position: defaultCenter,
-        map,
-        draggable: true,
-        title: 'Selected location',
+      const defaultIcon = L.divIcon({
+        html: `<div style="background:var(--primary,#3b82f6);width:28px;height:28px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        </div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        className: '',
       });
 
+      const marker = L.marker(defaultCenter, { icon: defaultIcon, draggable: true }).addTo(map);
       markerRef.current = marker;
 
       if (initialLat != null && initialLng != null) {
         reverseGeocode(initialLat, initialLng);
       }
 
-      map.addListener('click', (e: google.maps.MapMouseEvent) => {
-        if (e.latLng) {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
-          marker.setPosition({ lat, lng });
-          setSelectedLat(lat);
-          setSelectedLng(lng);
-          reverseGeocode(lat, lng);
-        }
+      map.on('click', (e: any) => {
+        const { lat, lng } = e.latlng;
+        marker.setLatLng([lat, lng]);
+        setSelectedLat(lat);
+        setSelectedLng(lng);
+        reverseGeocode(lat, lng);
       });
 
-      marker.addListener('dragend', () => {
-        const pos = marker.getPosition();
-        if (pos) {
-          const lat = pos.lat();
-          const lng = pos.lng();
-          setSelectedLat(lat);
-          setSelectedLng(lng);
-          reverseGeocode(lat, lng);
-        }
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        setSelectedLat(pos.lat);
+        setSelectedLng(pos.lng);
+        reverseGeocode(pos.lat, pos.lng);
       });
+
+      setMapReady(true);
     };
 
-    loadGoogleMaps();
-  }, [apiKey, initialLat, initialLng, reverseGeocode]);
+    initMap();
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSearch = async () => {
-    if (!searchQuery.trim() || !apiKey) return;
+    if (!searchQuery.trim()) return;
     setLoading(true);
     try {
       const res = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${apiKey}`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&accept-language=uz,ru,en`
       );
       const data = await res.json();
-      if (data.results?.[0]) {
-        const loc = data.results[0].geometry.location;
-        const lat = loc.lat;
-        const lng = loc.lng;
-        mapInstanceRef.current?.panTo({ lat, lng });
-        mapInstanceRef.current?.setZoom(16);
-        markerRef.current?.setPosition({ lat, lng });
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.setView([lat, lng], 16);
+        }
+        if (markerRef.current) {
+          markerRef.current.setLatLng([lat, lng]);
+        }
         setSelectedLat(lat);
         setSelectedLng(lng);
-        setAddress(data.results[0].formatted_address);
+        setAddress(data[0].display_name || searchQuery);
       }
     } catch {
-      // search failed silently
+      // search failed
     } finally {
       setLoading(false);
     }
@@ -190,35 +186,27 @@ export default function MapPickerModal({ onClose, onConfirm, initialLat, initial
           </button>
         </div>
 
-        {apiKey ? (
-          <div className="relative">
-            <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}>
-              <input
-                type="text"
-                placeholder="Manzilni qidirish..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="input text-sm flex-1"
-              />
-              <button onClick={handleSearch} disabled={loading} className="btn-primary text-xs px-3 py-1.5">
-                {loading ? '...' : 'Qidirish'}
-              </button>
+        <div className="relative">
+          <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}>
+            <input
+              type="text"
+              placeholder="Manzilni qidirish..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="input text-sm flex-1"
+            />
+            <button onClick={handleSearch} disabled={loading} className="btn-primary text-xs px-3 py-1.5">
+              {loading ? '...' : 'Qidirish'}
+            </button>
+          </div>
+          <div ref={mapRef} className="w-full" style={{ height: '350px', background: '#e5e7eb' }} />
+          {selectedLat != null && selectedLng != null && (
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t" style={{ borderColor: 'var(--border)' }}>
+              Koordinatalar: {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
             </div>
-            <div ref={mapRef} className="w-full" style={{ height: '350px' }} />
-            {selectedLat != null && selectedLng != null && (
-              <div className="px-3 py-2 text-xs text-muted-foreground border-t" style={{ borderColor: 'var(--border)' }}>
-                Koordinatalar: {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            <AppIcon name="ExclamationTriangleIcon" size={32} className="mx-auto mb-3 text-warning" />
-            <p>Google Maps API kaliti topilmadi.</p>
-            <p className="text-xs mt-1">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY env o&apos;zgaruvchisini kiriting.</p>
-          </div>
-        )}
+          )}
+        </div>
 
         {address && (
           <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
